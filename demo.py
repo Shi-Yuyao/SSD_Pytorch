@@ -8,11 +8,12 @@ import torch.nn.init as init
 import argparse
 from torch.autograd import Variable
 import torch.utils.data as data
-from data import COCODetection, VOCDetection, detection_collate, BaseTransform, preproc
+from data import COCODetection, VOCDetection, CheckoutDetection, detection_collate, BaseTransform, preproc
 from layers.modules import MultiBoxLoss, RefineMultiBoxLoss
 from layers.functions import Detect
 from utils.nms_wrapper import nms, soft_nms
 from configs.config import cfg, cfg_from_file, VOC_CLASSES, COCO_CLASSES
+from data.checkout import CHECKOUT_CLASSES
 from utils.box_utils import draw_rects
 import numpy as np
 import time
@@ -29,10 +30,10 @@ def arg_parse():
     parser = argparse.ArgumentParser(
         description='Single Shot MultiBox Detection')
     parser.add_argument(
-        "--images",
-        dest='images',
-        help="Image / Directory containing images to perform detection upon",
-        default="images",
+        "--video",
+        dest='video',
+        help="Test video",
+        default="test.mp4",
         type=str)
     parser.add_argument(
         '--weights',
@@ -90,7 +91,7 @@ def im_detect(img, net, detector, transform, thresh=0.01):
         for cls in img_classes:
             cls_mask = np.where(c_dets[:, -1] == cls)[0]
             image_pred_class = c_dets[cls_mask, :]
-            keep = nms(image_pred_class, cfg.TEST.NMS_OVERLAP, force_cpu=True)
+            keep = nms(image_pred_class[:, :5], cfg.TEST.NMS_OVERLAP, force_cpu=False)
             keep = keep[:50]
             image_pred_class = image_pred_class[keep, :]
             if not flag:
@@ -98,13 +99,23 @@ def im_detect(img, net, detector, transform, thresh=0.01):
                 flag = True
             else:
                 output = np.concatenate((output, image_pred_class), axis=0)
-        output[:, 0:2][output[:, 0:2] < 0] = 0
-        output[:, 2:4][output[:, 2:4] > 1] = 1
-        scale = np.array([w, h, w, h])
-        output[:, :4] = output[:, :4] * scale
+
+        if output is not None:
+            output[:, 0:2][output[:, 0:2] < 0] = 0
+            output[:, 2:4][output[:, 2:4] > 1] = 1
+            # scale = np.array([w, h, w, h])
+            # output[:, :4] = output[:, :4] * scale
+
+            scale = np.array([512, 512, 512, 512])
+            output[:, :4] = output[:, :4] * scale
+            roi_offset = np.array((1100, 700))
+            output[:, :2] += roi_offset
+            output[:, 2:4] += roi_offset
+
         t3 = time.time()
         print("transform_t:", round(t1 - t0, 3), "detect_time:",
               round(t2 - t1, 3), "nms_time:", round(t3 - t2, 3))
+
     return output
 
 
@@ -120,6 +131,10 @@ def main():
         trainvalDataset = VOCDetection
         classes = VOC_CLASSES
         top_k = 200
+    elif cfg.DATASETS.DATA_TYPE == 'CHECKOUT':
+        trainvalDataset = CheckoutDetection
+        classes = CHECKOUT_CLASSES
+        top_k = 50
     else:
         trainvalDataset = COCODetection
         classes = COCO_CLASSES
@@ -133,7 +148,7 @@ def main():
     cfg.TRAIN.TRAIN_ON = False
     net = SSD(cfg)
 
-    checkpoint = torch.load(args.weights)
+    checkpoint = torch.load(args.weights, map_location='cpu')
     state_dict = checkpoint['model']
     from collections import OrderedDict
     new_state_dict = OrderedDict()
@@ -145,21 +160,27 @@ def main():
             name = k
         new_state_dict[name] = v
     net.load_state_dict(new_state_dict)
+    net.cuda()
 
     detector = Detect(cfg)
     img_wh = cfg.TEST.INPUT_WH
     ValTransform = BaseTransform(img_wh, bgr_means, (2, 0, 1))
-    input_folder = args.images
     thresh = cfg.TEST.CONFIDENCE_THRESH
-    for item in os.listdir(input_folder)[2:3]:
-        img_path = os.path.join(input_folder, item)
-        print(img_path)
-        img = cv2.imread(img_path)
+
+    video = cv2.VideoCapture(args.video)
+    fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+    writer = cv2.VideoWriter('output.avi', fourcc, 30.0, (1000, 1000), True)
+
+    while True:
+        _, img = video.read()
+        if img is None:
+            break
         dets = im_detect(img, net, detector, ValTransform, thresh)
         draw_img = draw_rects(img, dets, classes)
-        out_img_name = "output_" + item
-        save_path = os.path.join(save_folder, out_img_name)
-        cv2.imwrite(save_path, img)
+        resized = cv2.resize(img, (1000, 1000), interpolation=cv2.INTER_NEAREST)
+        #cv2.imshow('image', resized)
+        #cv2.waitKey(10)
+        writer.write(resized)
 
 
 if __name__ == '__main__':

@@ -18,6 +18,39 @@ import math
 from utils.box_utils import matrix_iou
 
 
+def _fix_crop(image, boxes, labels):
+    height, width, _ = image.shape
+    w, h = 512, 512
+    for _ in range(50):
+        l = random.randrange(250) + 900
+        t = 700
+        roi = np.array((l, t, l + w, t + h))
+
+        centers = (boxes[:, :2] + boxes[:, 2:]) / 2
+        mask = np.logical_and(roi[:2] < centers, centers < roi[2:]) \
+            .all(axis=1)
+        boxes_t = boxes[mask].copy()
+        labels_t = labels[mask].copy()
+        if len(boxes_t) == 0:
+            continue
+
+        image_t = image[roi[1]:roi[3], roi[0]:roi[2]]
+
+        boxes_t[:, :2] = np.maximum(boxes_t[:, :2], roi[:2])
+        boxes_t[:, :2] -= roi[:2]
+        boxes_t[:, 2:] = np.minimum(boxes_t[:, 2:], roi[2:])
+        boxes_t[:, 2:] -= roi[:2]
+
+        return image_t, boxes_t, labels_t
+    else:
+        roi = np.array((900, 700, 900 + w, 700 + h))
+        image_t = image[roi[1]:roi[3], roi[0]:roi[2]]
+        boxes_t = np.zeros((1, 4))
+        labels_t = np.zeros((1, 1))
+
+        # print("Warning, fix_crop with no target", boxes, labels)
+        return image_t, boxes_t, labels_t
+
 def _crop(image, boxes, labels):
     height, width, _ = image.shape
 
@@ -45,7 +78,7 @@ def _crop(image, boxes, labels):
             max_iou = float('inf')
 
         for _ in range(50):
-            scale = random.uniform(0.3, 1.)
+            scale = random.uniform(0.7, 1.)
             min_ratio = max(0.5, scale * scale)
             max_ratio = min(2, 1. / scale / scale)
             ratio = math.sqrt(random.uniform(min_ratio, max_ratio))
@@ -115,7 +148,7 @@ def _expand(image, boxes, fill, p):
 
     height, width, depth = image.shape
     for _ in range(50):
-        scale = random.uniform(1, 4)
+        scale = random.uniform(0.9, 1.1)
 
         min_ratio = max(0.5, 1. / scale / scale)
         max_ratio = min(2, scale * scale)
@@ -176,6 +209,14 @@ class preproc(object):
     def __call__(self, image, targets):
         boxes = targets[:, :-1].copy()
         labels = targets[:, -1].copy()
+
+        image_crop, boxes, labels = _fix_crop(image, boxes, labels)
+        if len(labels.shape) != 2:
+            labels = np.expand_dims(labels, 1)
+        targets_crop = np.hstack((boxes, labels))
+        image = image_crop
+        targets = targets_crop
+
         if len(boxes) == 0:
             #boxes = np.empty((0, 4))
             targets = np.zeros((1, 5))
@@ -213,7 +254,7 @@ class preproc(object):
             image = preproc_for_test(image_o, self.resize_wh, self.means)
             return torch.from_numpy(image), targets_o
 
-        labels_t = np.expand_dims(labels_t, 1)
+        # labels_t = np.expand_dims(labels_t, 1)
         targets_t = np.hstack((boxes_t, labels_t))
 
         return torch.from_numpy(image_t), targets_t
@@ -248,9 +289,20 @@ class BaseTransform(object):
             cv2.INTER_NEAREST, cv2.INTER_LANCZOS4
         ]
         interp_method = interp_methods[0]
-        img = cv2.resize(
-            np.array(img), (self.resize_wh[0], self.resize_wh[1]),
-            interpolation=interp_method).astype(np.float32)
+        roi = np.array((1100, 700, 1100 + 512, 700 + 512))
+        img = img[roi[1]:roi[3], roi[0]:roi[2]].astype(np.float32)
+        # img = cv2.resize(
+        #     np.array(img), (self.resize_wh[0], self.resize_wh[1]),
+        #     interpolation=interp_method).astype(np.float32)
         img -= self.means
-        img = img.transpose(self.swap)
+        img = img.transpose(self.swap).astype(np.float32)
+        if target:
+            target[:, :2] = np.maximum(target[:, :2], roi[:2])
+            target[:, :2] -= roi[:2]
+            target[:, 2:4] = np.minimum(target[:, 2:4], roi[2:])
+            target[:, 2:4] -= roi[:2]
+        # pos = target[0, :].astype(np.uint32)
+        # cv2.rectangle(img, (pos[0], pos[1]), (pos[2], pos[3]), (0, 255, 0), 2)
+        # cv2.imshow("1", img)
+        # cv2.waitKey(0)
         return torch.from_numpy(img), target

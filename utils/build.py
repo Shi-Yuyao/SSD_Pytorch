@@ -136,7 +136,7 @@ ext_modules = [
         extra_compile_args={
             'gcc': ["-Wno-unused-function"],
             'nvcc': [
-                '-arch=sm_61', '--ptxas-options=-v', '-c',
+                '-arch=sm_35', '--ptxas-options=-v', '-c',
                 '--compiler-options', "'-fPIC'"
             ]
         },

@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1,0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -8,7 +8,7 @@ import torch.nn.init as init
 import argparse
 from torch.autograd import Variable
 import torch.utils.data as data
-from data import COCODetection, VOCDetection, detection_collate, BaseTransform, preproc
+from data import COCODetection, VOCDetection, CheckoutDetection, detection_collate, BaseTransform, preproc
 from layers.modules import MultiBoxLoss, RefineMultiBoxLoss
 from layers.functions import Detect
 from utils.nms_wrapper import nms, soft_nms
@@ -28,7 +28,7 @@ def arg_parse():
         description='Single Shot MultiBox Detection')
     parser.add_argument(
         '--weights',
-        default='weights/ssd_darknet_300.pth',
+        default='weights/refine_vgg_epoch_20_512.pth',
         type=str,
         help='Trained state_dict file path to open')
     parser.add_argument(
@@ -93,8 +93,12 @@ def eval_net(val_dataset,
                 boxes_ = boxes_.cpu().numpy()
                 scores_ = scores_.cpu().numpy()
                 img_wh = img_info[k]
-                scale = np.array([img_wh[0], img_wh[1], img_wh[0], img_wh[1]])
+                # scale = np.array([img_wh[0], img_wh[1], img_wh[0], img_wh[1]])
+                scale = np.array([512, 512, 512, 512])
                 boxes_ *= scale
+                roi_offset = np.array((1100, 700))
+                boxes_[:, :2] += roi_offset
+                boxes_[:, 2:] += roi_offset
                 for j in range(1, num_classes):
                     inds = np.where(scores_[:, j] > thresh)[0]
                     if len(inds) == 0:
@@ -135,6 +139,9 @@ def main():
     if cfg.DATASETS.DATA_TYPE == 'VOC':
         trainvalDataset = VOCDetection
         top_k = 200
+    elif cfg.DATASETS.DATA_TYPE == 'CHECKOUT':
+        trainvalDataset = CheckoutDetection
+        top_k = 50
     else:
         trainvalDataset = COCODetection
         top_k = 300
@@ -152,7 +159,7 @@ def main():
     cfg.TRAIN.TRAIN_ON = False
     net = SSD(cfg)
 
-    checkpoint = torch.load(args.weights)
+    checkpoint = torch.load(args.weights, map_location='cpu')
     state_dict = checkpoint['model']
     from collections import OrderedDict
     new_state_dict = OrderedDict()
@@ -164,6 +171,7 @@ def main():
             name = k
         new_state_dict[name] = v
     net.load_state_dict(new_state_dict)
+    net.cuda()
     detector = Detect(cfg)
     ValTransform = BaseTransform(size_cfg.IMG_WH, bgr_means, (2, 0, 1))
     val_dataset = trainvalDataset(dataroot, valSet, ValTransform, "val")

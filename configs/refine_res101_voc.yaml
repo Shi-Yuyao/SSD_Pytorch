@@ -1,6 +1,6 @@
 MODEL:
   TYPE: refine_res
-  SIZE: '300'
+  SIZE: '512'
   REFINE: True
   CONV_BODY: refine_res.RefineResnet101
   NUM_CLASSES: 21
@@ -57,9 +57,9 @@ SOLVER:
   START_EPOCH: 0
 
 DATASETS:
-  TRAIN_TYPE: [['0712', '0712_trainval']]
-  VAL_TYPE: [['0712', '2007_test']]
-  DATAROOT: 'data/datasets/VOCdevkit0712/'
+  TRAIN_TYPE: [['2007', 'trainval'], ['2012', 'trainval']]
+  VAL_TYPE: [['2007', 'test']]
+  DATAROOT: '/data/zhuliang/data/VOCdevkit/'
   DATA_TYPE: 'VOC'
   SETS:
     VOC: [['0712', '0712_trainval']]
@@ -68,7 +68,7 @@ DATASETS:
     COCO: [['2014', 'train'], ['2014', 'valminusminival']]
     VOC2007: [['0712', "2007_test"]]
     COCOval: [['2014', 'minival']]
-    VOCROOT: 'data/datasets/VOCdevkit0712/'
+    VOCROOT: '/data/zhuliang/data/VOCdevkit/'
     COCOROOT: 'data/datasets/coco2015'
   
 TEST:

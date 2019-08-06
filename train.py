@@ -1,5 +1,4 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "3,2,1,0"
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -8,7 +7,7 @@ import torch.nn.init as init
 import argparse
 from torch.autograd import Variable
 import torch.utils.data as data
-from data import COCODetection, VOCDetection, detection_collate, BaseTransform, preproc
+from data import COCODetection, VOCDetection, CheckoutDetection, detection_collate, BaseTransform, preproc
 from layers.modules import MultiBoxLoss, RefineMultiBoxLoss
 from layers.functions import Detect
 from utils.nms_wrapper import nms, soft_nms
@@ -182,8 +181,12 @@ def eval_net(val_dataset,
                 boxes_ = boxes_.cpu().numpy()
                 scores_ = scores_.cpu().numpy()
                 img_wh = img_info[k]
-                scale = np.array([img_wh[0], img_wh[1], img_wh[0], img_wh[1]])
+                #scale = np.array([img_wh[0], img_wh[1], img_wh[0], img_wh[1]])
+                scale = np.array([512, 512, 512, 512])
                 boxes_ *= scale
+                roi_offset = np.array((1100, 700))
+                boxes_[:, :2] += roi_offset
+                boxes_[:, 2:] += roi_offset
                 for j in range(1, num_classes):
                     inds = np.where(scores_[:, j] > thresh)[0]
                     if len(inds) == 0:
@@ -194,7 +197,7 @@ def eval_net(val_dataset,
                     c_dets = np.hstack((c_bboxes,
                                         c_scores[:, np.newaxis])).astype(
                                             np.float32, copy=False)
-                    keep = nms(c_dets, cfg.TEST.NMS_OVERLAP, force_cpu=True)
+                    keep = nms(c_dets, cfg.TEST.NMS_OVERLAP, force_cpu=False)
                     keep = keep[:50]
                     c_dets = c_dets[keep, :]
                     all_boxes[j][i] = c_dets
@@ -229,6 +232,9 @@ def main():
     if cfg.DATASETS.DATA_TYPE == 'VOC':
         trainvalDataset = VOCDetection
         top_k = 200
+    elif cfg.DATASETS.DATA_TYPE == 'CHECKOUT':
+        trainvalDataset = CheckoutDetection
+        top_k = 50
     else:
         trainvalDataset = COCODetection
         top_k = 300
@@ -311,7 +317,7 @@ def main():
               gamma, end_epoch, cfg)
         if (epoch % 10 == 0) or (epoch % 5 == 0 and epoch >= 200):
             save_checkpoint(net, epoch, size, optimizer)
-        if (epoch >= 50 and epoch % 10 == 0):
+        if (epoch >= 20 and epoch % 10 == 0):
             eval_net(
                 val_dataset,
                 val_loader,

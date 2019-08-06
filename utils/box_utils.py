@@ -44,6 +44,9 @@ def get_color(c, x, max_val):
 
 
 def draw_rects(img, rects, classes):
+    if rects is None:
+        return img
+
     for rect in rects:
         if rect[5] > 0.1:
             left_top = (int(float(rect[0])), int(float(rect[1])))
@@ -60,12 +63,12 @@ def draw_rects(img, rects, classes):
             cv2.rectangle(img, left_top, right_bottom, color, 2)
             t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1, 1)[0]
             right_bottom = left_top[0] + t_size[0] + 60, left_top[1] - t_size[
-                1] - 10
+                1] - 5
             cv2.rectangle(img, left_top, right_bottom, color, -1)
             cv2.putText(img,
                         str(label) + ": " + str(score),
                         (left_top[0], left_top[1] - t_size[1] + 8),
-                        cv2.FONT_HERSHEY_PLAIN, 1, [225, 255, 255], 1)
+                        cv2.FONT_HERSHEY_PLAIN, 1, [0, 0, 0], 1)
     return img
 
 
