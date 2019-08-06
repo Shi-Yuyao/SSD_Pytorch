@@ -22,7 +22,7 @@ def weights_init(m):
     for key in m.state_dict():
         if key.split('.')[-1] == 'weight':
             if 'conv' in key:
-                init.kaiming_normal(m.state_dict()[key], mode='fan_out')
+                init.kaiming_normal(m.state_dict()[key], mode='fan_out', nonlinearity='relu')
             if 'bn' in key:
                 m.state_dict()[key][...] = 1
         elif key.split('.')[-1] == 'bias':
