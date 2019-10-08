@@ -8,11 +8,11 @@ from torch.autograd import Variable
 from models.model_helper import FpnAdapter, weights_init
 
 
-def add_extras(size, in_channel, batch_norm=False):
+def add_extras(size, in_channel, out_channel, batch_norm=False):
     # Extra layers added to resnet for feature scaling
     layers = []
-    layers += [nn.Conv2d(in_channel, 256, kernel_size=1, stride=1)]
-    layers += [nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1)]
+    layers += [nn.Conv2d(in_channel, int(in_channel/4), kernel_size=1, stride=1)]
+    layers += [nn.Conv2d(int(in_channel/4), out_channel, kernel_size=3, stride=2, padding=1)]
     return layers
 
 
@@ -117,10 +117,16 @@ class RefineResnet(nn.Module):
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
         self.inchannel = block.expansion * 512
-        self.extras = nn.ModuleList(add_extras(str(size), self.inchannel))
-        self.smooth1 = nn.Conv2d(
-            self.inchannel, 512, kernel_size=3, stride=1, padding=1)
-        self.fpn = FpnAdapter([512, 1024, 512, 256], 4)
+        if block.__name__ == 'BasicBlock':
+            self.extras = nn.ModuleList(add_extras(str(size), self.inchannel, 128))
+            self.smooth1 = nn.Conv2d(
+                self.inchannel, 128, kernel_size=3, stride=1, padding=1)
+            self.fpn = FpnAdapter([128, 256, 128, 128], 4)
+        else:
+            self.extras = nn.ModuleList(add_extras(str(size), self.inchannel, 256))
+            self.smooth1 = nn.Conv2d(
+                self.inchannel, 512, kernel_size=3, stride=1, padding=1)
+            self.fpn = FpnAdapter([512, 1024, 512, 256], 4)
         self._init_modules()
 
     def _make_layer(self, block, planes, blocks, stride=1):
@@ -168,6 +174,10 @@ class RefineResnet(nn.Module):
         return arm_sources, odm_sources
 
 
+def RefineResnet18(size, channel_size='48'):
+    return RefineResnet(BasicBlock, [2, 2, 2, 2], size)
+
+
 def RefineResnet50(size, channel_size='48'):
     return RefineResnet(Bottleneck, [3, 4, 6, 3], size)
 
@@ -182,11 +192,15 @@ def RefineResnet152(size, channel_size='48'):
 
 if __name__ == "__main__":
     import os
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-    model = RefineResnet50(size=300)
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    model = RefineResnet101(size=512)
     print(model)
-    with torch.no_grad():
-        model.eval()
-        x = torch.randn(1, 3, 320, 320)
-        model.cuda()
-        model(x.cuda())
+    from compute_flops import *
+
+    print_model_param_flops(model, input_res=512)
+    # with torch.no_grad():
+    #     model.eval()
+    #     x = torch.randn(1, 3, 512, 512)
+    #     # model.cuda()
+    #     output = model(x)
+    #     print(output)

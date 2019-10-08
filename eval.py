@@ -1,5 +1,4 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -21,7 +20,7 @@ import pickle
 import datetime
 from models.model_builder import SSD
 import yaml
-
+from torchvision import models
 
 def arg_parse():
     parser = argparse.ArgumentParser(
@@ -82,7 +81,7 @@ def eval_net(val_dataset,
             t1 = time.time()
             x = imgs
             x = x.cuda()
-            output = net(x)
+            output = net(x, return_loss=False)
             t4 = time.time()
             boxes, scores = detector.forward(output)
             t2 = time.time()
@@ -94,9 +93,11 @@ def eval_net(val_dataset,
                 scores_ = scores_.cpu().numpy()
                 img_wh = img_info[k]
                 # scale = np.array([img_wh[0], img_wh[1], img_wh[0], img_wh[1]])
-                scale = np.array([512, 512, 512, 512])
+                # scale = np.array([512, 512, 512, 512])
+                scale = np.array([832, 832, 832, 832])
                 boxes_ *= scale
-                roi_offset = np.array((1100, 700))
+                # roi_offset = np.array((1100, 700))
+                roi_offset = np.array((850, 450))
                 boxes_[:, :2] += roi_offset
                 boxes_[:, 2:] += roi_offset
                 for j in range(1, num_classes):
@@ -109,7 +110,7 @@ def eval_net(val_dataset,
                     c_dets = np.hstack((c_bboxes,
                                         c_scores[:, np.newaxis])).astype(
                                             np.float32, copy=False)
-                    keep = nms(c_dets, cfg.TEST.NMS_OVERLAP, force_cpu=True)
+                    keep = nms(c_dets, cfg.TEST.NMS_OVERLAP, device=torch.cuda.current_device(), force_cpu=True)
                     keep = keep[:50]
                     c_dets = c_dets[keep, :]
                     all_boxes[j][i] = c_dets
@@ -158,7 +159,6 @@ def main():
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
     cfg.TRAIN.TRAIN_ON = False
     net = SSD(cfg)
-
     checkpoint = torch.load(args.weights, map_location='cpu')
     state_dict = checkpoint['model']
     from collections import OrderedDict
@@ -172,9 +172,10 @@ def main():
         new_state_dict[name] = v
     net.load_state_dict(new_state_dict)
     net.cuda()
+    # net = torch.nn.DataParallel(net).cuda()
     detector = Detect(cfg)
     ValTransform = BaseTransform(size_cfg.IMG_WH, bgr_means, (2, 0, 1))
-    val_dataset = trainvalDataset(dataroot, valSet, ValTransform, "val")
+    val_dataset = trainvalDataset(dataroot, valSet, ValTransform, dataset_name="val")
     val_loader = data.DataLoader(
         val_dataset,
         batch_size,

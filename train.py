@@ -19,6 +19,8 @@ import sys
 import pickle
 import datetime
 from models.model_builder import SSD
+import torch.distributed as dist
+import torchvision.models as models
 import yaml
 
 
@@ -31,7 +33,7 @@ def arg_parse():
         help='Config file for training (and optionally testing)')
     parser.add_argument(
         '--num_workers',
-        default=8,
+        default=4,
         type=int,
         help='Number of workers used in dataloading')
     parser.add_argument('--ngpu', default=2, type=int, help='gpus')
@@ -47,6 +49,12 @@ def arg_parse():
         '--save_folder',
         default='./weights/',
         help='Location to save checkpoint models')
+
+    parser.add_argument('--dist-backend', default='nccl', type=str,
+                        help='distributed backend')
+
+    parser.add_argument('--local_rank', type=int, default=0)
+
     args = parser.parse_args()
     return args
 
@@ -90,23 +98,23 @@ def train(train_loader, net, criterion, optimizer, epoch, epoch_step, gamma,
         t0 = time.time()
         lr = adjust_learning_rate(optimizer, epoch, epoch_step, gamma,
                                   epoch_size, iteration)
-        imgs = imgs.cuda()
-        imgs.requires_grad_()
-        with torch.no_grad():
-            targets = [anno.cuda() for anno in targets]
-        output = net(imgs)
+        #imgs = imgs.cuda()
+        #imgs.requires_grad_()
+        # with torch.no_grad():
+        targets = [anno.cuda() for anno in targets]
+        loss = net(imgs, targets, return_loss=True)
         optimizer.zero_grad()
-        if not cfg.MODEL.REFINE:
-            ssd_criterion = criterion[0]
-            loss_l, loss_c = ssd_criterion(output, targets)
-            loss = loss_l + loss_c
-        else:
-            arm_criterion = criterion[0]
-            odm_criterion = criterion[1]
-            arm_loss_l, arm_loss_c = arm_criterion(output, targets)
-            odm_loss_l, odm_loss_c = odm_criterion(
-                output, targets, use_arm=True, filter_object=True)
-            loss = arm_loss_l + arm_loss_c + odm_loss_l + odm_loss_c
+        # if not cfg.MODEL.REFINE:
+        #     ssd_criterion = criterion[0]
+        #     loss_l, loss_c = ssd_criterion(output, targets)
+        #     loss = loss_l + loss_c
+        # else:
+        #     arm_criterion = criterion[0]
+        #     odm_criterion = criterion[1]
+        #     arm_loss_l, arm_loss_c = arm_criterion(output, targets)
+        #     odm_loss_l, odm_loss_c = odm_criterion(
+        #         output, targets, use_arm=True, filter_object=True)
+        #     loss = arm_loss_l + arm_loss_c + odm_loss_l + odm_loss_c
         loss.backward()
         optimizer.step()
         t1 = time.time()
@@ -114,7 +122,7 @@ def train(train_loader, net, criterion, optimizer, epoch, epoch_step, gamma,
         all_time = ((end_epoch - epoch) * epoch_size +
                     (epoch_size - iteration)) * iteration_time
         eta = str(datetime.timedelta(seconds=int(all_time)))
-        if iteration % 10 == 0:
+        if args.local_rank == 0 and iteration % 10 == 0:
             if not cfg.MODEL.REFINE:
                 print('Epoch:' + repr(epoch) + ' || epochiter: ' +
                       repr(iteration % epoch_size) + '/' + repr(epoch_size) +
@@ -126,9 +134,11 @@ def train(train_loader, net, criterion, optimizer, epoch, epoch_step, gamma,
                 print('Epoch:' + repr(epoch) + ' || epochiter: ' +
                       repr(iteration % epoch_size) + '/' + repr(epoch_size) +
                       '|| arm_L: %.4f arm_C: %.4f||' %
-                      (arm_loss_l.item(), arm_loss_c.item()) +
+                      (0, 0) +
+                      # (arm_loss_l.item(), arm_loss_c.item()) +
                       ' odm_L: %.4f odm_C: %.4f||' %
-                      (odm_loss_l.item(), odm_loss_c.item()) +
+                      (0, 0) +
+                      # (odm_loss_l.item(), odm_loss_c.item()) +
                       ' loss: %.4f||' % (loss.item()) +
                       'iteration time: %.4f sec. ||' % (t1 - t0) +
                       'LR: %.5f' % (lr) + ' || eta time: {}'.format(eta))
@@ -182,9 +192,9 @@ def eval_net(val_dataset,
                 scores_ = scores_.cpu().numpy()
                 img_wh = img_info[k]
                 #scale = np.array([img_wh[0], img_wh[1], img_wh[0], img_wh[1]])
-                scale = np.array([512, 512, 512, 512])
+                scale = np.array([832, 832, 832, 832])
                 boxes_ *= scale
-                roi_offset = np.array((1100, 700))
+                roi_offset = np.array((850, 450))
                 boxes_[:, :2] += roi_offset
                 boxes_[:, 2:] += roi_offset
                 for j in range(1, num_classes):
@@ -197,7 +207,7 @@ def eval_net(val_dataset,
                     c_dets = np.hstack((c_bboxes,
                                         c_scores[:, np.newaxis])).astype(
                                             np.float32, copy=False)
-                    keep = nms(c_dets, cfg.TEST.NMS_OVERLAP, force_cpu=False)
+                    keep = nms(c_dets, cfg.TEST.NMS_OVERLAP, device=torch.cuda.current_device(), force_cpu=False)
                     keep = keep[:50]
                     c_dets = c_dets[keep, :]
                     all_boxes[j][i] = c_dets
@@ -209,10 +219,12 @@ def eval_net(val_dataset,
                 print('im_detect: {:d}/{:d} {:.3f}s {:.3f}s {:.3f}s'.format(
                     i + 1, num_images, forward_time, detect_time, nms_time))
     print("detect time: ", time.time() - st)
-    with open(det_file, 'wb') as f:
-        pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)
-    print('Evaluating detections')
-    val_dataset.evaluate_detections(all_boxes, eval_save_folder)
+
+    if args.local_rank == 0:
+        with open(det_file, 'wb') as f:
+            pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)
+        print('Evaluating detections')
+        val_dataset.evaluate_detections(all_boxes, eval_save_folder)
 
 
 
@@ -220,6 +232,14 @@ def main():
     global args
     args = arg_parse()
     cfg_from_file(args.cfg_file)
+
+    args.distributed = True#torch.cuda.is_available()
+
+    print("local_rank:", args.local_rank)
+    if args.distributed:
+        torch.cuda.set_device(args.local_rank)
+        dist.init_process_group(backend=args.dist_backend)
+
     save_folder = args.save_folder
     batch_size = cfg.TRAIN.BATCH_SIZE
     bgr_means = cfg.TRAIN.BGR_MEAN
@@ -250,6 +270,7 @@ def main():
         os.mkdir(save_folder)
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
     net = SSD(cfg)
+    # net = models.resnet18(pretrained=False)
     print(net)
     if cfg.MODEL.SIZE == '300':
         size_cfg = cfg.SMALL
@@ -261,7 +282,7 @@ def main():
         momentum=momentum,
         weight_decay=weight_decay)
     if args.resume_net != None:
-        checkpoint = torch.load(args.resume_net)
+        checkpoint = torch.load(args.resume_net, map_location=lambda storage, loc: storage.cuda())
         state_dict = checkpoint['model']
         from collections import OrderedDict
         new_state_dict = OrderedDict()
@@ -275,9 +296,15 @@ def main():
         net.load_state_dict(new_state_dict)
         optimizer.load_state_dict(checkpoint['optimizer'])
         print('Loading resume network...')
-    if args.ngpu > 1:
-        net = torch.nn.DataParallel(net)
-    net.cuda()
+    if not args.distributed:
+        net = torch.nn.DataParallel(net).cuda()
+    else:
+        net.cuda()
+        net = torch.nn.parallel.DistributedDataParallel(net,
+                                                        device_ids=[args.local_rank],
+                                                        output_device=args.local_rank,
+                                                        find_unused_parameters=True)
+
     cudnn.benchmark = True
 
     criterion = list()
@@ -295,7 +322,7 @@ def main():
     TrainTransform = preproc(size_cfg.IMG_WH, bgr_means, p)
     ValTransform = BaseTransform(size_cfg.IMG_WH, bgr_means, (2, 0, 1))
 
-    val_dataset = trainvalDataset(dataroot, valSet, ValTransform, dataset_name)
+    val_dataset = trainvalDataset(dataroot, valSet, ValTransform, dataset_name=dataset_name)
     val_loader = data.DataLoader(
         val_dataset,
         batch_size,
@@ -303,21 +330,36 @@ def main():
         num_workers=args.num_workers,
         collate_fn=detection_collate)
 
+    train_dataset = trainvalDataset(dataroot, trainSet, TrainTransform,
+                                    dataset_name=dataset_name)
+
+    if args.distributed:
+        print("world_size:", dist.get_world_size())
+        print("local_rank:", dist.get_rank())
+        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+    else:
+        train_sampler = None
+
+    train_loader = data.DataLoader(
+        train_dataset,
+        batch_size,
+        shuffle=(train_sampler is None),
+        sampler=train_sampler,
+        num_workers=args.num_workers,
+        pin_memory=False,
+        collate_fn=detection_collate)
+
     for epoch in range(start_epoch + 1, end_epoch + 1):
-        train_dataset = trainvalDataset(dataroot, trainSet, TrainTransform,
-                                        dataset_name)
-        epoch_size = len(train_dataset)
-        train_loader = data.DataLoader(
-            train_dataset,
-            batch_size,
-            shuffle=True,
-            num_workers=args.num_workers,
-            collate_fn=detection_collate)
+        if args.distributed:
+            train_sampler.set_epoch(epoch)
+
         train(train_loader, net, criterion, optimizer, epoch, epoch_step,
               gamma, end_epoch, cfg)
-        if (epoch % 10 == 0) or (epoch % 5 == 0 and epoch >= 200):
-            save_checkpoint(net, epoch, size, optimizer)
-        if (epoch >= 20 and epoch % 10 == 0):
+        if args.local_rank == 0:
+            if (epoch % 10 == 0) or (epoch % 5 == 0 and epoch >= 200):
+                save_checkpoint(net, epoch, size, optimizer)
+
+        if epoch >= 20 and epoch % 10 == 0:
             eval_net(
                 val_dataset,
                 val_loader,
@@ -328,7 +370,9 @@ def main():
                 top_k,
                 thresh=thresh,
                 batch_size=batch_size)
-    save_checkpoint(net, end_epoch, size, optimizer)
+
+    if args.local_rank == 0:
+        save_checkpoint(net, end_epoch, size, optimizer)
 
 
 if __name__ == '__main__':

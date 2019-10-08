@@ -10,7 +10,7 @@ MODEL:
 TRAIN:
   OVERLAP: 0.5
   BGR_MEAN: [104, 117, 123]
-  BATCH_SIZE: 32
+  BATCH_SIZE: 2
   OHEM: True
   NEG_RATIO: 3
   WARMUP: True
@@ -59,7 +59,8 @@ SOLVER:
 DATASETS:
   TRAIN_TYPE: [['2007', 'train']]
   VAL_TYPE: [['2007', 'test']]
-  DATAROOT: '/data/zhuliang/data/7.14/'
+#  DATAROOT: '/data/zhuliang/data/7.14/'
+  DATAROOT: '/Users/zhuliang/Pictures/trade_pic/7.14'
   DATA_TYPE: 'CHECKOUT'
   SETS:
     VOC: [['0712', '0712_trainval']]
@@ -72,10 +73,10 @@ DATASETS:
     COCOROOT: 'data/datasets/coco2015'
   
 TEST:
-  INPUT_WH: [320, 320]
+  INPUT_WH: [512, 512]
   CONFIDENCE_THRESH: 0.01
   NMS_OVERLAP: 0.01
-  BATCH_SIZE: 16
+  BATCH_SIZE: 1
   
 
 

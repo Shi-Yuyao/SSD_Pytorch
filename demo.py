@@ -1,5 +1,4 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1,0"
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -24,6 +23,16 @@ import datetime
 from models.model_builder import SSD
 import yaml
 import cv2
+from torchvision.ops import nms as torch_nms
+from multiprocessing import Process, Manager, Pipe, Array
+from threading import Thread
+from queue import Queue
+import json
+import math
+from collections import defaultdict
+import cv2
+from functools import partial
+from itertools import product
 
 
 def arg_parse():
@@ -37,7 +46,7 @@ def arg_parse():
         type=str)
     parser.add_argument(
         '--weights',
-        default='weights/ssd_darknet_300.pth',
+        default='new_data6/refine_res50_epoch_200_512.pth',
         type=str,
         help='Trained state_dict file path to open')
     parser.add_argument(
@@ -57,25 +66,53 @@ def arg_parse():
         help='Number of workers used in dataloading')
     parser.add_argument(
         '--retest', default=False, type=bool, help='test cache results')
+    parser.add_argument(
+        '--json',
+        default='',
+        type=str,
+        help='File path to json results')
+    parser.add_argument(
+        '--class_json',
+        default='',
+        type=str,
+        help='File path to json results')
+    parser.add_argument(
+        '--json_result',
+        default='demo.json',
+        type=str,
+        help='File path to json results')
+    parser.add_argument(
+        '--output',
+        default='output.avi',
+        type=str,
+        help='File path to output results')
     args = parser.parse_args()
     return args
 
 
-def im_detect(img, net, detector, transform, thresh=0.01):
+def im_detect(img, net, detector, transform, obj_json, thresh=0.01):
+    net.eval()
     with torch.no_grad():
         t0 = time.time()
-        w, h = img.shape[1], img.shape[0]
-        x = transform(img)[0].unsqueeze(0)
-        x = x.cuda()
+        # w, h = img.shape[1], img.shape[0]
+        x = transform(img)[0]
+        x = (x - torch.FloatTensor([104., 117., 123.])).transpose(0, 2).transpose(1, 2).unsqueeze(0)
+        # x = x.unsqueeze(0)
         t1 = time.time()
+        x = x.cuda()
         output = net(x)
         boxes, scores = detector.forward(output)
         t2 = time.time()
+
+        print("transform_t:", round(t1 - t0, 3), "detect_time:",
+              round(t2 - t1, 3))
+
         max_conf, max_id = scores[0].topk(1, 1, True, True)
         pos = max_id > 0
+
         if len(pos) == 0:
             return np.empty((0, 6))
-        boxes = boxes[0][pos.view(-1, 1).expand(len(pos), 4)].view(-1, 4)
+        boxes = boxes[0][pos.expand_as(boxes[0])].view(-1, 4)
         scores = max_conf[pos].view(-1, 1)
         max_id = max_id[pos].view(-1, 1)
         inds = scores > thresh
@@ -84,16 +121,18 @@ def im_detect(img, net, detector, transform, thresh=0.01):
         boxes = boxes[inds.view(-1, 1).expand(len(inds), 4)].view(-1, 4)
         scores = scores[inds].view(-1, 1)
         max_id = max_id[inds].view(-1, 1)
-        c_dets = torch.cat((boxes, scores, max_id.float()), 1).cpu().numpy()
-        img_classes = np.unique(c_dets[:, -1])
+        c_dets = torch.cat((boxes, scores, max_id.float()), 1)
+        img_classes = torch.unique(c_dets[:, -1])
         output = None
         flag = False
         for cls in img_classes:
-            cls_mask = np.where(c_dets[:, -1] == cls)[0]
+            cls_mask = c_dets[:, -1] == cls
             image_pred_class = c_dets[cls_mask, :]
-            keep = nms(image_pred_class[:, :5], cfg.TEST.NMS_OVERLAP, force_cpu=False)
+            # keep = nms(image_pred_class[:, :5], cfg.TEST.NMS_OVERLAP, device=torch.cuda.current_device(), force_cpu=True)
+            # keep = keep[:50]
+            keep = torch_nms(image_pred_class[:, :4], image_pred_class[:, 4], cfg.TEST.NMS_OVERLAP)
             keep = keep[:50]
-            image_pred_class = image_pred_class[keep, :]
+            image_pred_class = image_pred_class[keep, :].cpu().numpy()
             if not flag:
                 output = image_pred_class
                 flag = True
@@ -106,45 +145,234 @@ def im_detect(img, net, detector, transform, thresh=0.01):
             # scale = np.array([w, h, w, h])
             # output[:, :4] = output[:, :4] * scale
 
-            scale = np.array([512, 512, 512, 512])
+            # scale = np.array([512, 512, 512, 512])
+            scale_w = cfg.DATASETS.ROI[2] - cfg.DATASETS.ROI[0]
+            scale_h = cfg.DATASETS.ROI[3] - cfg.DATASETS.ROI[1]
+            scale = np.array([scale_w, scale_h, scale_w, scale_h])
             output[:, :4] = output[:, :4] * scale
-            roi_offset = np.array((1100, 700))
+            # roi_offset = np.array((1100, 700))
+            # roi_offset = np.array((350, 850))
+            roi_offset = np.array(cfg.DATASETS.ROI[:2])
             output[:, :2] += roi_offset
             output[:, 2:4] += roi_offset
 
-        t3 = time.time()
-        print("transform_t:", round(t1 - t0, 3), "detect_time:",
-              round(t2 - t1, 3), "nms_time:", round(t3 - t2, 3))
+            for o in output:
+                tmp_json = {"xmin": int(o[0]), "ymin": int(o[1]), "xmax": int(o[2]), "ymax": int(o[3]),
+                            "score": str(o[4]), "label": int(o[5])}
+                obj_json.append(tmp_json)
+
+        print(output)
 
     return output
 
+
+def decode_job(q, video_name):
+    print('decode_job start...')
+    video = cv2.VideoCapture(video_name)
+    count = 0
+    while True:
+        _, img = video.read()
+        if img is None:
+            q.put(None)
+            break
+        q.put(img)
+        count += 1
+        print(count)
+    print('decode_job end')
+
+
+def transform_job(img_q, data_q, transform):
+    print('transform_job start...')
+    while True:
+        img = img_q.get(True)
+        if img is None:
+            data_q.put((None, None))
+            break
+        x = transform(img)[0]
+        data_q.put((img, x))
+    print('transform_job end')
+
+def cal_obj_distance(o1, o2=None):
+    if isinstance(o1, tuple) or isinstance(o1, list):
+        o1, o2 = o1
+    center1 = ((o1['xmin'] + o1['xmax']) / 2, (o1['ymin'] + o1['ymax']) / 2)
+    center2 = ((o2['xmin'] + o2['xmax']) / 2, (o2['ymin'] + o2['ymax']) / 2)
+
+    distance = math.sqrt((center1[0] - center2[0])**2 + (center1[1] - center2[1])**2)
+
+    return distance
+
+def empty_list():
+    return [0, 0]
+
+MONEY = 1
+CASHBOX = 2
+MOBILE = 3
+SCANNER =4
+
+def process_json_new(json_file, class_json_file):
+    t1 = time.time()
+    json_result = json.load(open(json_file))
+    # class_result = json.load(open(class_json_file))
+
+    # for obj, c in zip(json_result, class_result):
+    #     obj['class'] = c
+
+    # for obj in json_result:
+    #     obj['class'] = 1
+
+    money_array = np.zeros(len(json_result), dtype=np.uint8)
+    cashbox_array = np.zeros(len(json_result), dtype=np.uint8)
+    mobile2mobile_array = np.zeros(len(json_result), dtype=np.uint8)
+    scanner2mobile_array = np.zeros(len(json_result), dtype=np.uint8)
+
+    for i, info in enumerate(json_result):
+        if info['objects'] and any([o['label'] == MONEY and
+                                    800 < o['ymin'] < 1000 and
+                                    1150 < o['xmin'] < 1480 for o in info['objects']]):
+            money_array[i] = 1
+        if info['objects'] and any([o['label'] == CASHBOX for o in info['objects']]):
+            cashbox_array[i] = 1
+
+        scanners = list(filter(lambda x: x['label'] == SCANNER, info['objects']))
+        mobiles = list(filter(lambda x: x['label'] == MOBILE, info['objects']))
+        if scanners and mobiles:
+            scanner = scanners[0]
+            pfunc = partial(cal_obj_distance, scanner)
+            distances = np.array(list(map(pfunc, mobiles)))
+            if distances.min() < 150:
+                scanner2mobile_array[i] = 1
+        elif len(mobiles) > 1:
+            distances = np.array(list(map(cal_obj_distance, product(mobiles, repeat=2))))
+            distances[np.where(distances == 0)] = 1e8
+            if distances.min() < 150:
+                mobile2mobile_array[i] = 1
+
+    ajust_mask = np.concatenate([np.ones(120, np.uint8), np.zeros(120, np.uint8)])
+
+    cashbox_array = cv2.erode(cashbox_array, np.ones(2, np.uint8))
+    cashbox_array = cv2.dilate(cashbox_array, np.ones(150, np.uint8))
+    cashbox_array = cv2.erode(cashbox_array, np.ones(250, np.uint8))
+    cashbox_array = cv2.dilate(cashbox_array, ajust_mask).squeeze()
+
+    money_array = np.clip(money_array + cashbox_array, 0, 1)
+    money_array = cv2.erode(money_array, np.ones(2, np.uint8))
+    money_array = cv2.dilate(money_array, np.ones(150, np.uint8))
+    money_array = cv2.erode(money_array, np.ones(250, np.uint8))
+    money_array = cv2.dilate(money_array, ajust_mask).squeeze()
+
+    scanner2mobile_array = cv2.dilate(scanner2mobile_array, ajust_mask).squeeze()
+
+    mobile2mobile_array = cv2.dilate(mobile2mobile_array, ajust_mask).squeeze()
+
+    result_array = np.clip(money_array + scanner2mobile_array + mobile2mobile_array, 0, 1)
+    for info, tag in zip(json_result, result_array):
+        info['payment_status'] = int(tag)
+
+    print("T:", time.time() - t1)
+
+    with open("result.json", 'w') as f:
+        json.dump(json_result, f, indent=4)
+
+    return json_result
+
+
+def process_json(json_file, class_json_file):
+    json_result = json.load(open(json_file))
+    # class_result = json.load(open(class_json_file))
+
+    # for obj, c in zip(json_result, class_result):
+    #     obj['class'] = c
+
+    for obj in json_result:
+        obj['class'] = 1
+
+    clip_id = 0
+    json_result[0]['clip_id'] = clip_id
+    for i, info in enumerate(json_result[20:-20]):
+        detect_time = 0
+        if info['objects'] and any([o['label'] == 1 for o in info['objects']]):
+            for j in range(-20, 20):
+                if json_result[20 + i + j]['objects'] and \
+                        any([o['label'] == 1 for o in json_result[10 + i + j]['objects']]):
+                    detect_time += 1
+            remove_index = []
+            if detect_time < 10:
+                for n in range(len(info['objects'])):
+                    if info['objects'][n]['label'] == 1:
+                        remove_index.append(n)
+            for n in remove_index:
+                del(info['objects'][n])
+
+
+    statistic = defaultdict(empty_list)
+    status = 0
+    cooldown = 30
+    for i, info in enumerate(json_result):
+        if info['objects']:
+            for obj in info['objects']:
+                if obj['label'] == 1:
+                    for temp_info in json_result[i:i+240]:
+                        if any([o['label'] == 2 for o in temp_info['objects']]):
+                            cooldown = 240
+                        else:
+                            cooldown = 90
+                    status = 1
+                elif obj['label'] == 2:
+                    for temp_info in json_result[i:i+240]:
+                        if any([o['label'] == 1 for o in temp_info['objects']]):
+                            cooldown = 240
+                            status = 1
+                elif obj['label'] == 3:
+                    scanners = list(filter(lambda x: x['label'] == 4, info['objects']))
+                    mobiles = list(filter(lambda x: x['label'] == 3, info['objects']))
+                    if scanners:
+                        distance = cal_obj_distance(obj, scanners[0])
+                        if distance < 150:
+                            status = 2
+                            cooldown = 60
+                    elif len(mobiles) > 1:
+                        for mobile in mobiles:
+                            distance = cal_obj_distance(obj, mobile)
+                            if 10 < distance < 150:
+                                status = 2
+                                cooldown = 60
+                                break
+                    else:
+                        cooldown -= 1
+                else:
+                    cooldown -= 1
+        elif status != 0:
+            cooldown -= 1
+
+        if cooldown < 0 and status != 0:
+            statistic[info['time'].split(':')[0]][status-1] += 1
+
+        if cooldown < 0:
+            status = 0
+        info['status'] = status
+
+    with open("result.json", 'w') as f:
+        json.dump(json_result, f, indent=4)
+    return json_result
 
 def main():
     global args
     args = arg_parse()
     cfg_from_file(args.cfg_file)
     bgr_means = cfg.TRAIN.BGR_MEAN
-    dataset_name = cfg.DATASETS.DATA_TYPE
-    batch_size = cfg.TEST.BATCH_SIZE
-    num_workers = args.num_workers
+
     if cfg.DATASETS.DATA_TYPE == 'VOC':
-        trainvalDataset = VOCDetection
         classes = VOC_CLASSES
-        top_k = 200
     elif cfg.DATASETS.DATA_TYPE == 'CHECKOUT':
-        trainvalDataset = CheckoutDetection
         classes = CHECKOUT_CLASSES
-        top_k = 50
     else:
-        trainvalDataset = COCODetection
         classes = COCO_CLASSES
-        top_k = 300
-    valSet = cfg.DATASETS.VAL_TYPE
-    num_classes = cfg.MODEL.NUM_CLASSES
+
     save_folder = args.save_folder
     if not os.path.exists(save_folder):
         os.mkdir(save_folder)
-    torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    # torch.set_default_tensor_type('torch.cuda.FloatTensor')
     cfg.TRAIN.TRAIN_ON = False
     net = SSD(cfg)
 
@@ -160,30 +388,88 @@ def main():
             name = k
         new_state_dict[name] = v
     net.load_state_dict(new_state_dict)
-    net.cuda()
+    # net.cuda()
 
     detector = Detect(cfg)
     img_wh = cfg.TEST.INPUT_WH
     ValTransform = BaseTransform(img_wh, bgr_means, (2, 0, 1))
     thresh = cfg.TEST.CONFIDENCE_THRESH
 
-    video = cv2.VideoCapture(args.video)
-    fourcc = cv2.VideoWriter_fourcc(*'MJPG')
-    writer = cv2.VideoWriter('output.avi', fourcc, 30.0, (1000, 1000), True)
+    resolution = (500, 500)
+    fourcc = cv2.VideoWriter_fourcc(*'DIVX')
+    writer = cv2.VideoWriter(args.output, fourcc, 30.0, resolution, True)
 
+    video = cv2.VideoCapture(args.video)
+    if args.json:
+        json_result = process_json_new(args.json, args.class_json)
+
+        count = 0
+        while True:
+            _, img = video.read()
+            if img is None:
+                break
+            obj_json = json_result[count]
+
+            dets = []
+            for obj in obj_json['objects']:
+                dets.append([obj['xmin'], obj['ymin'], obj['xmax'], obj['ymax'], float(obj['score']), obj['label']])
+
+            draw_img = draw_rects(img, dets, classes, obj_json.get('status', None), obj_json.get('class', None))
+            resized = cv2.resize(draw_img, resolution, interpolation=cv2.INTER_LINEAR)
+            writer.write(resized)
+            count += 1
+        return
+
+    img_q = Queue(64)
+    # data_q = Queue(64)
+    decode_process = Thread(target=decode_job, args=(img_q, args.video))
+    # transform_process = Thread(target=transform_job, args=(img_q, data_q, ValTransform))
+    decode_process.start()
+    # transform_process.start()
+
+    count = 0
+    json_result = []
+    st = time.time()
     while True:
-        _, img = video.read()
+        t1 = time.time()
+        # _, img = video.read()
+        img = img_q.get(True)
         if img is None:
             break
-        dets = im_detect(img, net, detector, ValTransform, thresh)
-        draw_img = draw_rects(img, dets, classes)
-        resized = cv2.resize(img, (1000, 1000), interpolation=cv2.INTER_NEAREST)
-        #cv2.imshow('image', resized)
-        #cv2.waitKey(10)
+        # img, x = data_q.get(True)
+        # if img is None:
+        #     break
+        img_json = dict()
+        seconds = round(count/30, 3)
+        img_json['time'] = "{:0>2}:{:0>2}:{}".format(int(seconds//3600), int((seconds % 3600)//60), round(seconds % 60, 3))
+        obj_json = []
+        dets = im_detect(img, net, detector, ValTransform, obj_json, thresh)
+        img_json['objects'] = obj_json
+        json_result.append(img_json)
+        count += 1
+        draw_img = draw_rects(img, dets, classes, None, None)
+        resized = cv2.resize(draw_img, resolution, interpolation=cv2.INTER_NEAREST)
+        # cv2.imshow('image', resized)
+        # cv2.waitKey(10)
         writer.write(resized)
+        print('Time:', time.time() - t1)
+
+    decode_process.join()
+    # transform_process.join()
+    print("final time", time.time() - st)
+
+    with open(args.json_result, 'w') as fp:
+        json.dump(json_result, fp, indent=4)
+
+    # count = 0
+    # if True:
+    #     img = cv2.imread("22697_0059.jpg")
+    #
+    #     dets = im_detect(img, net, detector, ValTransform, thresh)
+    #     draw_img = draw_rects(img, dets, classes)
+    #     cv2.imwrite("test{}.jpg".format(count), img)
+    #     count += 1
 
 
 if __name__ == '__main__':
-    st = time.time()
     main()
-    print("final time", time.time() - st)

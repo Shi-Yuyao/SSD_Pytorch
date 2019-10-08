@@ -2,9 +2,9 @@ MODEL:
   TYPE: refine_res
   SIZE: '512'
   REFINE: True
-  CONV_BODY: refine_res.RefineResnet101
+  CONV_BODY: refine_res.RefineResnet50
   NUM_CLASSES: 21
-  LOAD_PRETRAINED_WEIGHTS: True
+  LOAD_PRETRAINED_WEIGHTS: False
   PRETRAIN_WEIGHTS: './weights/pretrained_models/resnet101-5d3b4d8f.pth'
 
 TRAIN:
