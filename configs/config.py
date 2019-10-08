@@ -3,7 +3,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from utils.collections import AttrDict
+from utils.mycollections import AttrDict
 import six
 import yaml
 import torch
@@ -26,6 +26,7 @@ __C.MODEL.REFINE = False
 __C.MODEL.LOAD_PRETRAINED_WEIGHTS = False
 __C.MODEL.PRETRAIN_WEIGHTS = ''
 __C.MODEL.OBJECT_SCORE = 0.01
+__C.MODEL.INTERNAL_CHANNEL_SIZE = 256
 
 __C.TRAIN = AttrDict()
 __C.TRAIN.OVERLAP = 0.5
@@ -97,6 +98,7 @@ __C.DATASETS.TRAIN_TYPE = []
 __C.DATASETS.VAL_TYPE = []
 __C.DATASETS.DATAROOT = VOCROOT
 __C.DATASETS.DATA_TYPE = ''
+__C.DATASETS.ROI = []
 
 __C.DATASETS.SETS = AttrDict()
 __C.DATASETS.SETS.VOC = [['0712', '0712_trainval']]

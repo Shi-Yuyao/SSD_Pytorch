@@ -16,6 +16,8 @@ import numpy as np
 import random
 import math
 from utils.box_utils import matrix_iou
+from PIL import Image
+from configs.config import cfg
 
 
 def _crop(image, boxes, labels):
@@ -143,11 +145,17 @@ def _expand(image, boxes, fill, p):
 
 
 def _mirror(image, boxes):
-    _, width, _ = image.shape
+    height, width, _ = image.shape
     if random.randrange(2):
         image = image[:, ::-1]
         boxes = boxes.copy()
         boxes[:, 0::2] = width - boxes[:, 2::-2]
+
+    if random.randrange(2):
+        image = image[::-1, :]
+        boxes = boxes.copy()
+        boxes[:, 1::2] = height - boxes[:, 3::-2]
+
     return image, boxes
 
 

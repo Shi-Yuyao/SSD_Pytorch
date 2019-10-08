@@ -10,7 +10,9 @@ import os
 from models.model_helper import weights_init
 import importlib
 from layers.functions.prior_layer import PriorLayer
-
+from layers.modules import RefineMultiBoxLoss, MultiBoxLoss
+from torchvision import models
+import torch.distributed as dist
 
 def get_func(func_name):
     """Helper to return a function object by name. func_name must identify a
@@ -84,6 +86,19 @@ class SSD(nn.Module):
             self.arm_num_classes = 2
             self.odm_loc = nn.ModuleList()
             self.odm_conf = nn.ModuleList()
+
+        self.criterion = []
+        if cfg.MODEL.REFINE:
+            # detector = Detect(cfg)
+            arm_criterion = RefineMultiBoxLoss(cfg, 2)
+            odm_criterion = RefineMultiBoxLoss(cfg, cfg.MODEL.NUM_CLASSES)
+            self.criterion.append(arm_criterion)
+            self.criterion.append(odm_criterion)
+        else:
+            # detector = Detect(cfg)
+            ssd_criterion = MultiBoxLoss(cfg)
+            self.criterion.append(ssd_criterion)
+
         self.arm_loc = nn.ModuleList()
         self.arm_conf = nn.ModuleList()
         self.arm_channels = size_cfg.ARM_CHANNELS
@@ -139,22 +154,28 @@ class SSD(nn.Module):
         if cfg.TRAIN.TRAIN_ON:
             self._init_modules()
 
-    def forward(self, x):
+    def forward(self, img, targets=None, return_loss=False, **kwargs):
+        if return_loss:
+            return self.forward_train(img, targets, **kwargs)
+        else:
+            return self.forward_test(img, **kwargs)
+
+    def forward_train(self, img, targets):
 
         arm_loc = list()
         arm_conf = list()
         if self.cfg.MODEL.REFINE:
             odm_loc = list()
             odm_conf = list()
-            arm_xs, odm_xs = self.extractor(x)
+            arm_xs, odm_xs = self.extractor(img)
             for (x, l, c) in zip(odm_xs, self.odm_loc, self.odm_conf):
                 odm_loc.append(l(x).permute(0, 2, 3, 1).contiguous())
                 odm_conf.append(c(x).permute(0, 2, 3, 1).contiguous())
             odm_loc = torch.cat([o.view(o.size(0), -1) for o in odm_loc], 1)
             odm_conf = torch.cat([o.view(o.size(0), -1) for o in odm_conf], 1)
         else:
-            arm_xs = self.extractor(x)
-        img_wh = (x.size(3), x.size(2))
+            arm_xs = self.extractor(img)
+        img_wh = (img.size(3), img.size(2))
         feature_maps_wh = [(t.size(3), t.size(2)) for t in arm_xs]
         for (x, l, c) in zip(arm_xs, self.arm_loc, self.arm_conf):
             arm_loc.append(l(x).permute(0, 2, 3, 1).contiguous())
@@ -174,4 +195,55 @@ class SSD(nn.Module):
                       arm_conf.view(arm_conf.size(0), -1, self.num_classes),
                       self.priors if self.input_fixed else self.prior_layer(
                           img_wh, feature_maps_wh))
+
+        if not self.cfg.MODEL.REFINE:
+            ssd_criterion = self.criterion[0]
+            loss_l, loss_c = ssd_criterion(output, targets)
+            loss = loss_l + loss_c
+        else:
+            arm_criterion = self.criterion[0]
+            odm_criterion = self.criterion[1]
+            arm_loss_l, arm_loss_c = arm_criterion(output, targets)
+            odm_loss_l, odm_loss_c = odm_criterion(
+                output, targets, use_arm=True, filter_object=True)
+            loss = arm_loss_l + arm_loss_c + odm_loss_l + odm_loss_c
+
+        return loss
+
+
+    def forward_test(self, img):
+        arm_loc = list()
+        arm_conf = list()
+        if self.cfg.MODEL.REFINE:
+            odm_loc = list()
+            odm_conf = list()
+            arm_xs, odm_xs = self.extractor(img)
+            for (x, l, c) in zip(odm_xs, self.odm_loc, self.odm_conf):
+                odm_loc.append(l(x).permute(0, 2, 3, 1).contiguous())
+                odm_conf.append(c(x).permute(0, 2, 3, 1).contiguous())
+            odm_loc = torch.cat([o.view(o.size(0), -1) for o in odm_loc], 1)
+            odm_conf = torch.cat([o.view(o.size(0), -1) for o in odm_conf], 1)
+        else:
+            arm_xs = self.extractor(img)
+        img_wh = (img.size(3), img.size(2))
+        feature_maps_wh = [(t.size(3), t.size(2)) for t in arm_xs]
+        for (x, l, c) in zip(arm_xs, self.arm_loc, self.arm_conf):
+            arm_loc.append(l(x).permute(0, 2, 3, 1).contiguous())
+            arm_conf.append(c(x).permute(0, 2, 3, 1).contiguous())
+        arm_loc = torch.cat([o.view(o.size(0), -1) for o in arm_loc], 1)
+        arm_conf = torch.cat([o.view(o.size(0), -1) for o in arm_conf], 1)
+        if self.cfg.MODEL.REFINE:
+            output = (arm_loc.view(arm_loc.size(0), -1, 4),
+                      arm_conf.view(
+                          arm_conf.size(0), -1, self.arm_num_classes),
+                      odm_loc.view(odm_loc.size(0), -1, 4),
+                      odm_conf.view(odm_conf.size(0), -1, self.num_classes),
+                      self.priors if self.input_fixed else self.prior_layer(
+                          img_wh, feature_maps_wh))
+        else:
+            output = (arm_loc.view(arm_loc.size(0), -1, 4),
+                      arm_conf.view(arm_conf.size(0), -1, self.num_classes),
+                      self.priors if self.input_fixed else self.prior_layer(
+                          img_wh, feature_maps_wh))
+
         return output

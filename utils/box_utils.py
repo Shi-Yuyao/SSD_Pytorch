@@ -9,6 +9,7 @@ if torch.cuda.is_available():
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 import torch.nn.init as init
+from PIL import Image, ImageFont, ImageDraw
 
 
 def xavier(param):
@@ -43,12 +44,15 @@ def get_color(c, x, max_val):
     return int(r * 255)
 
 
-def draw_rects(img, rects, classes):
+def draw_rects(img, rects, classes, status, class_status):
+    if rects is None:
+        return img
+
     for rect in rects:
         if rect[5] > 0.1:
             left_top = (int(float(rect[0])), int(float(rect[1])))
             right_bottom = (int(float(rect[2])), int(float(rect[3])))
-            score = round(rect[4], 3)
+            score = round(rect[4], 2)
             cls_id = int(rect[-1])
             label = "{0}".format(classes[cls_id])
             class_len = len(classes)
@@ -58,14 +62,44 @@ def draw_rects(img, rects, classes):
             blue = get_color(0, offset, class_len)
             color = (blue, green, red)
             cv2.rectangle(img, left_top, right_bottom, color, 2)
-            t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1, 1)[0]
-            right_bottom = left_top[0] + t_size[0] + 60, left_top[1] - t_size[
-                1] - 10
+            t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 2, 2)[0]
+            right_bottom = left_top[0] + t_size[0] + 100, left_top[1] - t_size[
+                1] - 15
             cv2.rectangle(img, left_top, right_bottom, color, -1)
             cv2.putText(img,
                         str(label) + ": " + str(score),
                         (left_top[0], left_top[1] - t_size[1] + 8),
-                        cv2.FONT_HERSHEY_PLAIN, 1, [225, 255, 255], 1)
+                        cv2.FONT_HERSHEY_PLAIN, 2, [0, 0, 0], 2)
+
+    if status is not None:
+        img_PIL = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        font = ImageFont.truetype('PingFang.ttc', 130)
+
+        if class_status:
+            class_message = u'收银中'
+            color = (0, 255, 255)
+        else:
+            class_message = ''
+            color = (0, 255, 0)
+
+        if status and class_status:
+            message = u'支付中'
+            color = (0, 0, 255)
+        else:
+            message = ''
+
+        draw = ImageDraw.Draw(img_PIL)
+        color = color[::-1]
+        draw.text((200, 200), class_message, font=font, fill=color)
+        draw.text((1300, 200), message, font=font, fill=color)
+        color = color[::-1]
+        img = cv2.cvtColor(np.asarray(img_PIL), cv2.COLOR_RGB2BGR)
+
+        cv2.rectangle(img, (0, 0), (img.shape[1], img.shape[0]), color, 40)
+    # cv2.putText(img, str(status),
+    #             (1700, 500),
+    #             cv2.FONT_HERSHEY_PLAIN, 10, [0, 0, 255], 5)
+
     return img
 
 

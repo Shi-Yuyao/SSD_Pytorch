@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import torch.nn.init as init
-
+from configs.config import cfg
 
 def xavier(param):
     init.xavier_uniform_(param)
@@ -22,7 +22,7 @@ def weights_init(m):
     for key in m.state_dict():
         if key.split('.')[-1] == 'weight':
             if 'conv' in key:
-                init.kaiming_normal(m.state_dict()[key], mode='fan_out')
+                init.kaiming_normal(m.state_dict()[key], mode='fan_out', nonlinearity='relu')
             if 'bn' in key:
                 m.state_dict()[key][...] = 1
         elif key.split('.')[-1] == 'bias':
@@ -34,9 +34,9 @@ def trans_layers(block, fpn_num):
     for i in range(fpn_num):
         layers += [
             nn.Sequential(
-                nn.Conv2d(block[i], 256, kernel_size=3, stride=1, padding=1),
+                nn.Conv2d(block[i], cfg.MODEL.INTERNAL_CHANNEL_SIZE, kernel_size=3, stride=1, padding=1),
                 nn.ReLU(inplace=True),
-                nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1))
+                nn.Conv2d(cfg.MODEL.INTERNAL_CHANNEL_SIZE, cfg.MODEL.INTERNAL_CHANNEL_SIZE, kernel_size=3, stride=1, padding=1))
         ]
 
     return layers
@@ -68,7 +68,7 @@ def trans_layers_2(raw_channels, inner_channels):
 def latent_layers(fpn_num):
     layers = []
     for i in range(fpn_num):
-        layers += [nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)]
+        layers += [nn.Conv2d(cfg.MODEL.INTERNAL_CHANNEL_SIZE, cfg.MODEL.INTERNAL_CHANNEL_SIZE, kernel_size=3, stride=1, padding=1)]
     return layers
 
 

@@ -148,9 +148,9 @@ class RefineMultiBoxLoss(nn.Module):
 
             if num_pos.data.sum() > 0:
                 num_neg = torch.clamp(
-                self.negpos_ratio * num_pos, max=pos.size(1) - 1)
+                self.negpos_ratio * num_pos, max=pos.size(1) - 1, min=self.negpos_ratio)
             else:
-                fake_num_pos = torch.ones(32, 1).long() * 15
+                fake_num_pos = torch.ones(num, 1).long() * 1
                 num_neg = torch.clamp(
                 self.negpos_ratio * fake_num_pos, max=pos.size(1) - 1)
             neg = idx_rank < num_neg.expand_as(idx_rank)
@@ -164,8 +164,14 @@ class RefineMultiBoxLoss(nn.Module):
             targets_weighted = conf_t[(pos + neg).gt(0)]
             loss_c = F.cross_entropy(
                 conf_p, targets_weighted, size_average=False)
+            #print(conf_p)
+            #print(targets_weighted)
+            #print(loss_c)
         else:
-            loss_c = F.cross_entropy(conf_p, conf_t, size_average=False)
+            #loss_c = F.cross_entropy(conf_data, conf_t, size_average=False)
+            print(conf_data.shape, conf_t.shape)
+            loss_c = F.cross_entropy(conf_data.view(-1, conf_data.size(2)), conf_t.view(-1, 1).squeeze(1), size_average=True)
+
 
         # Localization Loss (Smooth L1)
         # Shape: [batch,num_priors,4]
@@ -174,10 +180,10 @@ class RefineMultiBoxLoss(nn.Module):
             loc_p = loc_data[pos_idx].view(-1, 4)
             loc_t = loc_t[pos_idx].view(-1, 4)
             loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
-            N = num_pos.data.sum()
+            N = (num_pos.data.sum() + num_neg.data.sum())/2
         else:
             loss_l = torch.zeros(1)
-            N = 1.0
+            N = num_pos.data.sum() + num_neg.data.sum()
 
         loss_l /= float(N)
         loss_c /= float(N)
