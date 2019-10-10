@@ -21,28 +21,32 @@ if sys.version_info[0] == 2:
 else:
     import xml.etree.ElementTree as ET
 
+# VOC_CLASSES = (
+#     '__background__',  # always index 0
+#     'aeroplane',
+#     'bicycle',
+#     'bird',
+#     'boat',
+#     'bottle',
+#     'bus',
+#     'car',
+#     'cat',
+#     'chair',
+#     'cow',
+#     'diningtable',
+#     'dog',
+#     'horse',
+#     'motorbike',
+#     'person',
+#     'pottedplant',
+#     'sheep',
+#     'sofa',
+#     'train',
+#     'tvmonitor')
+
 VOC_CLASSES = (
     '__background__',  # always index 0
-    'aeroplane',
-    'bicycle',
-    'bird',
-    'boat',
-    'bottle',
-    'bus',
-    'car',
-    'cat',
-    'chair',
-    'cow',
-    'diningtable',
-    'dog',
-    'horse',
-    'motorbike',
-    'person',
-    'pottedplant',
-    'sheep',
-    'sofa',
-    'train',
-    'tvmonitor')
+    'human')
 
 # for making bounding boxes pretty
 COLORS = ((255, 0, 0, 128), (0, 255, 0, 128), (0, 0, 255, 128),
@@ -261,7 +265,8 @@ class VOCDetection(data.Dataset):
         cachedir = os.path.join(self.root, 'annotations_cache')
         aps = []
         # The PASCAL VOC metric changed in 2010
-        use_07_metric = True if int(self._year) < 2010 else False
+        # use_07_metric = True if int(self._year) < 2010 else False
+        use_07_metric = False
         print('VOC07 metric? ' + ('Yes' if use_07_metric else 'No'))
         if output_dir is not None and not os.path.isdir(output_dir):
             os.mkdir(output_dir)

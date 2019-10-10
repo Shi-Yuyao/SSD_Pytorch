@@ -208,7 +208,7 @@ class SSD(nn.Module):
                 output, targets, use_arm=True, filter_object=True)
             loss = arm_loss_l + arm_loss_c + odm_loss_l + odm_loss_c
 
-        return loss
+        return loss, arm_loss_l.data, arm_loss_c.data, odm_loss_l.data, odm_loss_c.data
 
 
     def forward_test(self, img):

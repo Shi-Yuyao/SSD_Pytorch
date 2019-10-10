@@ -117,28 +117,32 @@ __C.TEST.NMS_TYPE = 'NMS'
 __C.TEST.NMS_OVERLAP = 0.45
 __C.TEST.BATCH_SIZE = 16
 
+# VOC_CLASSES = (
+#     '__background__',  # always index 0
+#     'aeroplane',
+#     'bicycle',
+#     'bird',
+#     'boat',
+#     'bottle',
+#     'bus',
+#     'car',
+#     'cat',
+#     'chair',
+#     'cow',
+#     'diningtable',
+#     'dog',
+#     'horse',
+#     'motorbike',
+#     'person',
+#     'pottedplant',
+#     'sheep',
+#     'sofa',
+#     'train',
+#     'tvmonitor')
+
 VOC_CLASSES = (
     '__background__',  # always index 0
-    'aeroplane',
-    'bicycle',
-    'bird',
-    'boat',
-    'bottle',
-    'bus',
-    'car',
-    'cat',
-    'chair',
-    'cow',
-    'diningtable',
-    'dog',
-    'horse',
-    'motorbike',
-    'person',
-    'pottedplant',
-    'sheep',
-    'sofa',
-    'train',
-    'tvmonitor')
+    'human')
 
 COCO_CLASSES = ('__background__', 'person', 'bicycle', 'car', 'motorbike',
                 'aeroplane', 'bus', 'train', 'truck', 'boat', 'traffic light',

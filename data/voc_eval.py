@@ -73,7 +73,6 @@ def voc_ap(rec, prec, use_07_metric=False):
 def voc_eval(detpath,
              annopath,
              imagesetfile,
-             image_set,
              classname,
              cachedir,
              ovthresh=0.5,
@@ -108,11 +107,9 @@ def voc_eval(detpath,
         os.mkdir(cachedir)
     cachefile = os.path.join(cachedir, 'annots.pkl')
     # read list of images
-    imagenames = []
-    for date, name in image_set:
-        with open(imagesetfile.format(date, name), 'r') as f:
-            lines = f.readlines()
-        imagenames.extend([(date, x.strip()) for x in lines])
+    with open(imagesetfile, 'r') as f:
+        lines = f.readlines()
+    imagenames = [x.strip() for x in lines]
 
     if not os.path.isfile(cachefile):
         # load annots
@@ -140,7 +137,7 @@ def voc_eval(detpath,
         difficult = np.array([x['difficult'] for x in R]).astype(np.bool)
         det = [False] * len(R)
         npos = npos + sum(~difficult)
-        class_recs['{}/{}'.format(*imagename)] = {
+        class_recs[imagename] = {
             'bbox': bbox,
             'difficult': difficult,
             'det': det
