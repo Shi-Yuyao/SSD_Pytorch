@@ -274,6 +274,7 @@ class VOCDetection(data.Dataset):
                 filename,
                 annopath,
                 imagesetfile,
+                self.image_set,
                 cls,
                 cachedir,
                 ovthresh=0.5,

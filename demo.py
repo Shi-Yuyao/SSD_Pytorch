@@ -32,7 +32,10 @@ import math
 from collections import defaultdict
 import cv2
 from functools import partial
+<<<<<<< Updated upstream
 from itertools import product
+=======
+>>>>>>> Stashed changes
 
 
 def arg_parse():
@@ -192,9 +195,13 @@ def transform_job(img_q, data_q, transform):
         data_q.put((img, x))
     print('transform_job end')
 
+<<<<<<< Updated upstream
 def cal_obj_distance(o1, o2=None):
     if isinstance(o1, tuple) or isinstance(o1, list):
         o1, o2 = o1
+=======
+def cal_obj_distance(o1, o2):
+>>>>>>> Stashed changes
     center1 = ((o1['xmin'] + o1['xmax']) / 2, (o1['ymin'] + o1['ymax']) / 2)
     center2 = ((o2['xmin'] + o2['xmax']) / 2, (o2['ymin'] + o2['ymax']) / 2)
 
@@ -211,15 +218,23 @@ MOBILE = 3
 SCANNER =4
 
 def process_json_new(json_file, class_json_file):
+<<<<<<< Updated upstream
     t1 = time.time()
+=======
+>>>>>>> Stashed changes
     json_result = json.load(open(json_file))
     # class_result = json.load(open(class_json_file))
 
     # for obj, c in zip(json_result, class_result):
     #     obj['class'] = c
 
+<<<<<<< Updated upstream
     # for obj in json_result:
     #     obj['class'] = 1
+=======
+    for obj in json_result:
+        obj['class'] = 1
+>>>>>>> Stashed changes
 
     money_array = np.zeros(len(json_result), dtype=np.uint8)
     cashbox_array = np.zeros(len(json_result), dtype=np.uint8)
@@ -227,9 +242,13 @@ def process_json_new(json_file, class_json_file):
     scanner2mobile_array = np.zeros(len(json_result), dtype=np.uint8)
 
     for i, info in enumerate(json_result):
+<<<<<<< Updated upstream
         if info['objects'] and any([o['label'] == MONEY and
                                     800 < o['ymin'] < 1000 and
                                     1150 < o['xmin'] < 1480 for o in info['objects']]):
+=======
+        if info['objects'] and any([o['label'] == MONEY for o in info['objects']]):
+>>>>>>> Stashed changes
             money_array[i] = 1
         if info['objects'] and any([o['label'] == CASHBOX for o in info['objects']]):
             cashbox_array[i] = 1
@@ -242,6 +261,7 @@ def process_json_new(json_file, class_json_file):
             distances = np.array(list(map(pfunc, mobiles)))
             if distances.min() < 150:
                 scanner2mobile_array[i] = 1
+<<<<<<< Updated upstream
         elif len(mobiles) > 1:
             distances = np.array(list(map(cal_obj_distance, product(mobiles, repeat=2))))
             distances[np.where(distances == 0)] = 1e8
@@ -254,10 +274,18 @@ def process_json_new(json_file, class_json_file):
     cashbox_array = cv2.dilate(cashbox_array, np.ones(150, np.uint8))
     cashbox_array = cv2.erode(cashbox_array, np.ones(250, np.uint8))
     cashbox_array = cv2.dilate(cashbox_array, ajust_mask).squeeze()
+=======
+        # elif len(mobiles) > 1:
+
+    cashbox_array = cv2.erode(cashbox_array, np.ones(2, np.uint8))
+    cashbox_array = cv2.dilate(cashbox_array, np.ones(150, np.uint8))
+    cashbox_array = cv2.erode(cashbox_array, np.ones(155, np.uint8)).squeeze()
+>>>>>>> Stashed changes
 
     money_array = np.clip(money_array + cashbox_array, 0, 1)
     money_array = cv2.erode(money_array, np.ones(2, np.uint8))
     money_array = cv2.dilate(money_array, np.ones(150, np.uint8))
+<<<<<<< Updated upstream
     money_array = cv2.erode(money_array, np.ones(250, np.uint8))
     money_array = cv2.dilate(money_array, ajust_mask).squeeze()
 
@@ -273,6 +301,17 @@ def process_json_new(json_file, class_json_file):
 
     with open("result.json", 'w') as f:
         json.dump(json_result, f, indent=4)
+=======
+    money_array = cv2.erode(money_array, np.ones(155, np.uint8)).squeeze()
+
+    scanner2mobile_array = cv2.dilate(scanner2mobile_array,
+                                      np.concatenate([np.ones(60, np.uint8), np.zeros(60, np.uint8)])).squeeze()
+    # scanner2mobile_array = cv2.erode(scanner2mobile_array, np.ones(95, np.uint8)).squeeze()
+
+    result_array = np.clip(money_array + scanner2mobile_array, 0, 1)
+    for info, tag in zip(json_result, result_array):
+        info['status'] = tag
+>>>>>>> Stashed changes
 
     return json_result
 
@@ -395,11 +434,28 @@ def main():
     ValTransform = BaseTransform(img_wh, bgr_means, (2, 0, 1))
     thresh = cfg.TEST.CONFIDENCE_THRESH
 
+<<<<<<< Updated upstream
     resolution = (500, 500)
     fourcc = cv2.VideoWriter_fourcc(*'DIVX')
     writer = cv2.VideoWriter(args.output, fourcc, 30.0, resolution, True)
 
     video = cv2.VideoCapture(args.video)
+=======
+    resolution = (800, 800)
+    fourcc = cv2.VideoWriter_fourcc(*'DIVX')
+    writer = cv2.VideoWriter(args.output, fourcc, 30.0, resolution, True)
+
+    # manager = Manager()
+    img_q = Queue(64)
+    # data_q = Queue(64)
+    decode_process = Thread(target=decode_job, args=(img_q, args.video))
+    # transform_process = Thread(target=transform_job, args=(img_q, data_q, ValTransform))
+    decode_process.start()
+    # transform_process.start()
+
+    video = cv2.VideoCapture(args.video)
+
+>>>>>>> Stashed changes
     if args.json:
         json_result = process_json_new(args.json, args.class_json)
 
@@ -419,6 +475,7 @@ def main():
             writer.write(resized)
             count += 1
         return
+<<<<<<< Updated upstream
 
     img_q = Queue(64)
     # data_q = Queue(64)
@@ -426,6 +483,8 @@ def main():
     # transform_process = Thread(target=transform_job, args=(img_q, data_q, ValTransform))
     decode_process.start()
     # transform_process.start()
+=======
+>>>>>>> Stashed changes
 
     count = 0
     json_result = []
