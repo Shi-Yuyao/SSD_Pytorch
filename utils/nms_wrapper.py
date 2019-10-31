@@ -6,7 +6,7 @@
 # --------------------------------------------------------
 
 from .nms.cpu_nms import cpu_nms, cpu_soft_nms
-# from .nms.gpu_nms import gpu_nms
+from .nms.gpu_nms import gpu_nms
 
 # def nms(dets, thresh, force_cpu=False):
 #     """Dispatch to either CPU or GPU NMS implementations."""

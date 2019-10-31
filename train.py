@@ -102,7 +102,7 @@ def train(train_loader, net, criterion, optimizer, epoch, epoch_step, gamma,
         #imgs.requires_grad_()
         # with torch.no_grad():
         targets = [anno.cuda() for anno in targets]
-        loss = net(imgs, targets, return_loss=True)
+        loss, arm_loss_l, arm_loss_c, odm_loss_l, odm_loss_c = net(imgs, targets, return_loss=True)
         optimizer.zero_grad()
         # if not cfg.MODEL.REFINE:
         #     ssd_criterion = criterion[0]
@@ -134,11 +134,9 @@ def train(train_loader, net, criterion, optimizer, epoch, epoch_step, gamma,
                 print('Epoch:' + repr(epoch) + ' || epochiter: ' +
                       repr(iteration % epoch_size) + '/' + repr(epoch_size) +
                       '|| arm_L: %.4f arm_C: %.4f||' %
-                      (0, 0) +
-                      # (arm_loss_l.item(), arm_loss_c.item()) +
+                      (arm_loss_l.item(), arm_loss_c.item()) +
                       ' odm_L: %.4f odm_C: %.4f||' %
-                      (0, 0) +
-                      # (odm_loss_l.item(), odm_loss_c.item()) +
+                      (odm_loss_l.item(), odm_loss_c.item()) +
                       ' loss: %.4f||' % (loss.item()) +
                       'iteration time: %.4f sec. ||' % (t1 - t0) +
                       'LR: %.5f' % (lr) + ' || eta time: {}'.format(eta))

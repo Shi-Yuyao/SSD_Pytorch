@@ -200,6 +200,8 @@ class SSD(nn.Module):
             ssd_criterion = self.criterion[0]
             loss_l, loss_c = ssd_criterion(output, targets)
             loss = loss_l + loss_c
+
+            return loss, loss_l.data, loss_c.data
         else:
             arm_criterion = self.criterion[0]
             odm_criterion = self.criterion[1]
@@ -208,10 +210,11 @@ class SSD(nn.Module):
                 output, targets, use_arm=True, filter_object=True)
             loss = arm_loss_l + arm_loss_c + odm_loss_l + odm_loss_c
 
-        return loss
+            return loss, arm_loss_l.data, arm_loss_c.data, odm_loss_l.data, odm_loss_c.data
 
 
     def forward_test(self, img):
+        img = img.permute(0, 3, 1, 2)
         arm_loc = list()
         arm_conf = list()
         if self.cfg.MODEL.REFINE:
