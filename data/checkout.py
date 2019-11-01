@@ -234,7 +234,6 @@ class CheckoutDetection(data.Dataset):
         name = self.image_set[0][1]
         annopath = os.path.join(rootpath, '{:s}', 'Annotations', '{:s}.xml')
         imagesetfile = os.path.join(rootpath, '{:s}', '{:s}.txt')
-        print(imagesetfile)
         cachedir = os.path.join(self.root, 'annotations_cache')
         aps = []
         # The PASCAL VOC metric changed in 2010

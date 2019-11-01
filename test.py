@@ -64,6 +64,7 @@ def eval_net(val_dataset,
              thresh=0.01,
              batch_size=1):
     net.eval()
+    roi = np.array(cfg.DATASETS.ROI)
     num_images = len(val_dataset)
     num_classes = cfg.MODEL.NUM_CLASSES
     eval_save_folder = "./eval/"
@@ -100,9 +101,9 @@ def eval_net(val_dataset,
                 img_wh = img_info[k][:2]
                 img_json['img_id'] = img_id
                 scale = np.array([img_wh[0], img_wh[1], img_wh[0], img_wh[1]])
-                scale_w = cfg.DATASETS.ROI[2] - cfg.DATASETS.ROI[0]
-                scale_h = cfg.DATASETS.ROI[3] - cfg.DATASETS.ROI[1]
-                scale = np.array([scale_w, scale_h, scale_w, scale_h])
+                xscale = roi[2] - roi[0]
+                yscale = roi[3] - roi[1]
+                scale = np.array([xscale, yscale, xscale, yscale])
                 boxes_ *= scale
                 roi_offset = np.array(cfg.DATASETS.ROI[:2])
                 boxes_[:, :2] += roi_offset
