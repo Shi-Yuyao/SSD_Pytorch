@@ -63,7 +63,7 @@ class SSD(nn.Module):
             if self.cfg.MODEL.TYPE.split('_')[-1] == 'vgg':
                 self.extractor.vgg.load_state_dict(weights)
             else:
-                self.extractor.load_state_dict(weights, strict=False)
+                self.extractor.features.load_state_dict(weights, strict=True)
 
     def __init__(self, cfg):
         super(SSD, self).__init__()
