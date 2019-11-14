@@ -105,7 +105,7 @@ def eval_net(val_dataset,
                     c_dets = np.hstack((c_bboxes,
                                         c_scores[:, np.newaxis])).astype(
                                             np.float32, copy=False)
-                    keep = nms(c_dets, cfg.TEST.NMS_OVERLAP, force_cpu=True)
+                    keep = nms(c_dets, cfg.TEST.NMS_OVERLAP, force_cpu=False)
                     keep = keep[:50]
                     c_dets = c_dets[keep, :]
                     all_boxes[j][i] = c_dets

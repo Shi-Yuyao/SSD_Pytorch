@@ -12,17 +12,19 @@ def add_extras(size, in_channel, batch_norm=False):
     # Extra layers added to resnet for feature scaling
     layers = []
     layers += [nn.Conv2d(in_channel, 256, kernel_size=1, stride=1)]
-    layers += [nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1)]
+    layers += [nn.Conv2d(256, 512, kernel_size=3, stride=2, padding=1)]
+    layers += [nn.Conv2d(512, 256, kernel_size=1, stride=1)]
+    layers += [nn.Conv2d(256, 512, kernel_size=3, stride=2, padding=1)]
+    layers += [nn.Conv2d(512, 128, kernel_size=1, stride=1)]
+    layers += [nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)]
+    # if size == '300':
     layers += [nn.Conv2d(256, 128, kernel_size=1, stride=1)]
     layers += [nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)]
-    if size == '300':
-        layers += [nn.Conv2d(256, 128, kernel_size=1, stride=1)]
-        layers += [nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=0)]
-    else:
-        layers += [nn.Conv2d(256, 128, kernel_size=1, stride=1)]
-        layers += [nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)]
-        layers += [nn.Conv2d(256, 128, kernel_size=1, stride=1)]
-        layers += [nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)]
+    # else:
+    #     layers += [nn.Conv2d(256, 128, kernel_size=1, stride=1)]
+    #     layers += [nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)]
+    #     layers += [nn.Conv2d(256, 128, kernel_size=1, stride=1)]
+    #     layers += [nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)]
 
     return layers
 
@@ -177,15 +179,21 @@ class MobileNetV2(nn.Module):
 
     def forward(self, x):
         sources = list()
-        for i in range(7):
+        for i in range(14):
             x = self.features[i](x)
-        sources.append(x)
+        # sources.append(x)
 
-        for i in range(7, 14):
-            x = self.features[i](x)
-        sources.append(x)
+        # for i in range(7, 14):
+        #     x = self.features[i](x)
+        # sources.append(x)
 
-        for i in range(14, len(self.features)):
+        for i in range(3):
+            x = self.features[14].conv[i](x)
+        sources.append(x)
+        for i in range(3, len(self.features[14].conv)):
+            x = self.features[14].conv[i](x)
+
+        for i in range(15, len(self.features)):
             x = self.features[i](x)
         sources.append(x)
 

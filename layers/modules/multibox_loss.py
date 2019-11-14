@@ -104,9 +104,9 @@ class MultiBoxLoss(nn.Module):
             num_pos = pos.long().sum(1, keepdim=True)
             if num_pos.data.sum() > 0:
                 num_neg = torch.clamp(
-                self.negpos_ratio * num_pos, max=pos.size(1) - 1)
+                self.negpos_ratio * num_pos, max=pos.size(1) - 1, min=self.negpos_ratio)
             else:
-                fake_num_pos = torch.ones(32, 1).long() * 15
+                fake_num_pos = torch.ones(num, 1).long() * 2
                 num_neg = torch.clamp(
                 self.negpos_ratio * fake_num_pos, max=pos.size(1) - 1)
             neg = idx_rank < num_neg.expand_as(idx_rank)
@@ -128,10 +128,12 @@ class MultiBoxLoss(nn.Module):
             loc_p = loc_data[pos_idx].view(-1, 4)
             loc_t = loc_t[pos_idx].view(-1, 4)
             loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
-            N = num_pos.data.sum()
+            N = (num_pos.data.sum() + num_neg.data.sum())/2
         else:
             loss_l = torch.zeros(1)
-            N = 1.0
+            N = num_pos.data.sum() + num_neg.data.sum()
+            print('Warning, num_pos == 0')
+
         loss_l /= float(N)
         loss_c /= float(N)
         return loss_l, loss_c
