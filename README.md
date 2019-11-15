@@ -39,7 +39,10 @@ Note*: Check you GPU architecture support in utils/build.py, line 131. Default i
 ```
 
 ## Datasets
-To make things easy, we provide a simple VOC dataset loader that inherits `torch.utils.data.Dataset` making it fully compatible with the `torchvision.datasets` [API](http://pytorch.org/docs/torchvision/datasets.html).
+
+### Checkout audit datasets
+Now we have 7.13 and 7.14 two days labeled data in folder 172.16.0.172:/data/zhuliang/data/mozi
+
 
 ### VOC Dataset
 ##### Download VOC2007 trainval & test
@@ -81,6 +84,24 @@ $COCO/images/val2014/
 
 
 ## Training
+
+### SSD-Mobilenetv2 for checkout auditing
+- First checkout mobilenet branch code
+- Download Mobilenetv2 pretrained model [Mobilenetv2](https://storage.googleapis.com/models-hao/mb2-imagenet-71_8.pth) into ./weights/pretrained_models
+- Revise the dataroot config in ./configs/ssd_mobilenetv2_checkout.yaml
+- Train command
+
+```Shell
+python train.py --cfg ./configs/ssd_mobilenetv2_checkout.yaml
+```
+
+- Eval command
+
+```Shell
+python eval.py --cfg ./configs/ssd_mobilenetv2_checkout.yaml --weights ./eval_weights
+```
+
+### Other architectures
 - First download the fc-reduced [VGG-16](https://arxiv.org/abs/1409.1556) PyTorch base network weights at: https://s3.amazonaws.com/amdegroot-models/vgg16_reducedfc.pth
 - ResNet pre-trained basenet weight file is available at [ResNet50](https://download.pytorch.org/models/resnet50-19c8e357.pth), [ResNet101](https://download.pytorch.org/models/resnet101-5d3b4d8f.pth), [ResNet152](https://download.pytorch.org/models/resnet152-b121ed2d.pth)
 - By default, we assume you have downloaded the file in the `SSD_Pytorch/weights/pretrained_models` dir:
