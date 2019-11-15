@@ -242,15 +242,14 @@ class CheckoutDetection(data.Dataset):
                                 dets[k, 3] + 1))
 
     def _do_python_eval(self, output_dir='output'):
-        rootpath = os.path.join(self.root, 'VOC' + self._year)
+        rootpath = os.path.join(self.root, self._year)
         name = self.image_set[0][1]
         annopath = os.path.join(rootpath, 'Annotations', '{:s}.xml')
-        imagesetfile = os.path.join(rootpath, 'ImageSets', 'Main',
-                                    name + '.txt')
+        imagesetfile = os.path.join(rootpath, name + '.txt')
         cachedir = os.path.join(self.root, 'annotations_cache')
         aps = []
         # The PASCAL VOC metric changed in 2010
-        use_07_metric = True if int(self._year) < 2010 else False
+        use_07_metric = False
         print('VOC07 metric? ' + ('Yes' if use_07_metric else 'No'))
         if output_dir is not None and not os.path.isdir(output_dir):
             os.mkdir(output_dir)

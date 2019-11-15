@@ -56,7 +56,7 @@ SOLVER:
   START_EPOCH: 0
 
 DATASETS:
-  TRAIN_TYPE: [['7.13_new', 'train'], ['7.13_new', 'train']]
+  TRAIN_TYPE: [['7.13_new', 'train']]
   VAL_TYPE: [['7.13_new', 'test']]
   DATAROOT: '/data/zhuliang/data/mozi/'
   DATA_TYPE: 'CHECKOUT'

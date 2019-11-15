@@ -8,7 +8,7 @@ import torch.nn.init as init
 import argparse
 from torch.autograd import Variable
 import torch.utils.data as data
-from data import COCODetection, VOCDetection, detection_collate, BaseTransform, preproc
+from data import COCODetection, VOCDetection, CheckoutDetection, detection_collate, BaseTransform, preproc
 from layers.modules import MultiBoxLoss, RefineMultiBoxLoss
 from layers.functions import Detect
 from utils.nms_wrapper import nms, soft_nms
@@ -134,6 +134,9 @@ def main():
     num_workers = args.num_workers
     if cfg.DATASETS.DATA_TYPE == 'VOC':
         trainvalDataset = VOCDetection
+        top_k = 200
+    elif cfg.DATASETS.DATA_TYPE == 'CHECKOUT':
+        trainvalDataset = CheckoutDetection
         top_k = 200
     else:
         trainvalDataset = COCODetection
