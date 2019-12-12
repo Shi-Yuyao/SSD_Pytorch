@@ -1,4 +1,5 @@
 import os
+
 os.environ["CUDA_VISIBLE_DEVICES"] = "3,2,1,0"
 import torch
 import torch.nn as nn
@@ -25,28 +26,33 @@ import yaml
 cudnn.enabled = True
 cudnn.benchmark = True
 
+
 def arg_parse():
     parser = argparse.ArgumentParser(description='SSD Training')
-    parser.add_argument(
+    parser.add_argument(  # 加载配置文件
         '--cfg',
         dest='cfg_file',
         required=True,
         help='Config file for training (and optionally testing)')
-    parser.add_argument(
+    parser.add_argument(  # 配置线程数
         '--num_workers',
         default=8,
         type=int,
         help='Number of workers used in dataloading')
-    parser.add_argument('--ngpu', default=2, type=int, help='gpus')
-    parser.add_argument(
-        '--resume_net', default=None, help='resume net for retraining')
-    parser.add_argument(
+    parser.add_argument(  # 配置GPU数
+        '--ngpu',
+        default=2,
+        type=int, help='gpus')
+    parser.add_argument(  # 配置继续训练模型
+        '--resume_net',
+        default=None,
+        help='resume net for retraining')
+    parser.add_argument(  # 配置继续训练epoch
         '--resume_epoch',
         default=0,
         type=int,
         help='resume iter for retraining')
-
-    parser.add_argument(
+    parser.add_argument(  # 配置存储文件夹
         '--save_folder',
         default='./weights/',
         help='Location to save checkpoint models')
@@ -60,12 +66,11 @@ def adjust_learning_rate(optimizer, epoch, step_epoch, gamma, epoch_size,
     # Adapted from PyTorch Imagenet example:
     # https://github.com/pytorch/examples/blob/master/imagenet/main.py
     """
-    ## warmup
     if epoch <= cfg.TRAIN.WARMUP_EPOCH:
         if cfg.TRAIN.WARMUP:
             iteration += (epoch_size * (epoch - 1))
             lr = 1e-6 + (cfg.SOLVER.BASE_LR - 1e-6) * iteration / (
-                epoch_size * cfg.TRAIN.WARMUP_EPOCH)
+                    epoch_size * cfg.TRAIN.WARMUP_EPOCH)
         else:
             lr = cfg.SOLVER.BASE_LR
     else:
@@ -77,7 +82,7 @@ def adjust_learning_rate(optimizer, epoch, step_epoch, gamma, epoch_size,
                 if epoch > step_epoch[idx] and epoch <= step_epoch[idx + 1]:
                     div = idx
                     break
-        lr = cfg.SOLVER.BASE_LR * (gamma**div)
+        lr = cfg.SOLVER.BASE_LR * (gamma ** div)
 
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
@@ -195,7 +200,7 @@ def eval_net(val_dataset,
                     c_scores = scores_[inds, j]
                     c_dets = np.hstack((c_bboxes,
                                         c_scores[:, np.newaxis])).astype(
-                                            np.float32, copy=False)
+                        np.float32, copy=False)
                     keep = nms(c_dets, cfg.TEST.NMS_OVERLAP, force_cpu=False)
                     keep = keep[:50]
                     c_dets = c_dets[keep, :]
@@ -212,7 +217,6 @@ def eval_net(val_dataset,
         pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)
     print('Evaluating detections')
     val_dataset.evaluate_detections(all_boxes, eval_save_folder)
-
 
 
 def main():
@@ -277,7 +281,7 @@ def main():
     if args.ngpu > 1:
         net = torch.nn.DataParallel(net)
     net.cuda()
-    #cudnn.benchmark = True
+    # cudnn.benchmark = True
 
     criterion = list()
     if cfg.MODEL.REFINE:
