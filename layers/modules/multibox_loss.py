@@ -3,9 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from torch.autograd import Variable
-from utils.box_utils import match, log_sum_exp
+from utils.box_utils import match, log_sum_exp, decode
 from .focal_loss_softmax import FocalLossSoftmax
 from .focal_loss_sigmoid import FocalLossSigmoid
+from .weight_GIoU_loss import bbox_overlaps
 
 GPU = False
 if torch.cuda.is_available():
@@ -65,7 +66,6 @@ class MultiBoxLoss(nn.Module):
                 conf shape: torch.size(batch_size,num_priors,num_classes)
                 loc shape: torch.size(batch_size,num_priors,4)
                 priors shape: torch.size(num_priors,4)
-
             ground_truth (tensor): Ground truth boxes and labels for a batch,
                 shape: [batch_size,num_objs,5] (last idx is the label).
         """
@@ -104,11 +104,11 @@ class MultiBoxLoss(nn.Module):
             num_pos = pos.long().sum(1, keepdim=True)
             if num_pos.data.sum() > 0:
                 num_neg = torch.clamp(
-                self.negpos_ratio * num_pos, max=pos.size(1) - 1, min=self.negpos_ratio)
+                    self.negpos_ratio * num_pos, max=pos.size(1) - 1, min=self.negpos_ratio)
             else:
                 fake_num_pos = torch.ones(num, 1).long() * 2
                 num_neg = torch.clamp(
-                self.negpos_ratio * fake_num_pos, max=pos.size(1) - 1)
+                    self.negpos_ratio * fake_num_pos, max=pos.size(1) - 1)
             neg = idx_rank < num_neg.expand_as(idx_rank)
 
             # Confidence Loss Including Positive and Negative Examples
@@ -121,14 +121,23 @@ class MultiBoxLoss(nn.Module):
                 conf_p, targets_weighted, size_average=False)
         else:
             loss_c = F.cross_entropy(conf_p, conf_t, size_average=False)
-        # Localization Loss (Smooth L1)
+        # Localization Loss (Smooth L1/GIoU)
         # Shape: [batch,num_priors,4]
         if num_pos.data.sum() > 0:
             pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_data)
+            priors = priors.unsqueeze(0).expand_as(loc_data)
+            priors_pos = priors[pos_idx].view(-1, 4)
+
             loc_p = loc_data[pos_idx].view(-1, 4)
             loc_t = loc_t[pos_idx].view(-1, 4)
-            loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
-            N = (num_pos.data.sum() + num_neg.data.sum())/2
+            '''采用Smooth L1 Loss'''
+            # loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
+            '''采用GIoU Loss'''
+            giou_loc_p = decode(loc_p, priors_pos, self.variance)
+            giou_loc_t = decode(loc_t, priors_pos, self.variance)
+            loss_l = torch.mean(bbox_overlaps(giou_loc_p, giou_loc_t, mode='giou'))
+
+            N = (num_pos.data.sum() + num_neg.data.sum()) / 2
         else:
             loss_l = torch.zeros(1)
             N = num_pos.data.sum() + num_neg.data.sum()
