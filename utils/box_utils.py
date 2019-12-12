@@ -4,8 +4,10 @@ import math
 import numpy as np
 import cv2
 from utils.nms.cpu_nms import get_iou_weights, get_mask
+
 if torch.cuda.is_available():
     import torch.backends.cudnn as cudnn
+
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 import torch.nn.init as init
@@ -15,10 +17,13 @@ def xavier(param):
     init.xavier_uniform_(param)
 
 
-# def weights_init(m):
-#     if isinstance(m, nn.Conv2d):
-#         xavier(m.weight.data)
-#         m.bias.data.zero_()
+def reoffset2pointform(loc, priors, variances):
+    boxes = torch.cat(
+        (priors[:, :2] + loc[:, :2] * variances[0] * priors[:, 2:],  # GT:C_x,C_y
+         priors[:, 2:] * torch.exp(loc[:, 2:] * variances[1])), 1)  # GT:w,h
+    boxes[:, :2] -= boxes[:, 2:] / 2  # Xmin, Ymin
+    boxes[:, 2:] += boxes[:, :2]  # Xmax, Ymax
+    return boxes
 
 
 def weights_init(m):
@@ -134,10 +139,10 @@ def jaccard(box_a, box_b):
     inter = intersect(box_a, box_b)
     area_a = ((box_a[:, 2] - box_a[:, 0]) *
               (box_a[:, 3] - box_a[:, 1])).unsqueeze(1).expand_as(
-                  inter)  # [A,B]
+        inter)  # [A,B]
     area_b = ((box_b[:, 2] - box_b[:, 0]) *
               (box_b[:, 3] - box_b[:, 1])).unsqueeze(0).expand_as(
-                  inter)  # [A,B]
+        inter)  # [A,B]
     union = area_a + area_b - inter
     return inter / union  # [A,B]
 
@@ -265,7 +270,6 @@ def refine_match(threshold,
 
 
 def get_prior_weigths(threshold, truths, defaults, variance, loc_data):
-
     decoded_boxes = decode(loc_data, defaults, variance)
     overlaps = jaccard(truths, decoded_boxes)
     # overlaps = jaccard(
@@ -322,9 +326,9 @@ def encode_multi(matched, priors, offsets, variances):
 
     # dist b/t match center and prior's center
     g_cxcy = (
-        matched[:, :2] + matched[:, 2:]) / 2 - priors[:, :2] - offsets[:, :2]
+                     matched[:, :2] + matched[:, 2:]) / 2 - priors[:, :2] - offsets[:, :2]
     # encode variance
-    #g_cxcy /= (variances[0] * priors[:, 2:])
+    # g_cxcy /= (variances[0] * priors[:, 2:])
     g_cxcy.div_(variances[0] * offsets[:, 2:])
     # match wh / prior wh
     g_wh = (matched[:, 2:] - matched[:, :2]) / priors[:, 2:]
