@@ -18,24 +18,24 @@ import math
 from utils.box_utils import matrix_iou
 
 
-def _crop(image, boxes, labels):
+def _crop(image, boxes, labels):  # crop原始图像增加训练图像的数量
     height, width, _ = image.shape
 
     if len(boxes) == 0:
         return image, boxes, labels
 
     while True:
-        mode = random.choice((
-            None,
-            (0.1, None),
+        mode = random.choice((  # crop图像与与Key Object的IoU的可能性
+            None,  # 直接采用原图
+            (0.1, None),  # min IOU 与 max IoU
             (0.3, None),
             (0.5, None),
             (0.7, None),
             (0.9, None),
-            (None, None),
+            (None, None),  # 随机crop，不需要crop出来的图片满足IoU条件
         ))
 
-        if mode is None:
+        if mode is None:  # 如果没有crop到则返回
             return image, boxes, labels
 
         min_iou, max_iou = mode
@@ -44,13 +44,13 @@ def _crop(image, boxes, labels):
         if max_iou is None:
             max_iou = float('inf')
 
-        for _ in range(50):
-            scale = random.uniform(0.3, 1.)
-            min_ratio = max(0.5, scale * scale)
-            max_ratio = min(2, 1. / scale / scale)
-            ratio = math.sqrt(random.uniform(min_ratio, max_ratio))
-            w = int(scale * ratio * width)
-            h = int((scale / ratio) * height)
+        for _ in range(50):  # 随机尝试50次
+            scale = random.uniform(0.1, 1.)  # 放大的尺度随机到0.1到1之间
+            min_ratio = max(0.5, scale * scale)  # min的范围为0.5到1
+            max_ratio = min(2, 1. / scale / scale)  # max的范围为1到2
+            ratio = math.sqrt(random.uniform(min_ratio, max_ratio))  # 在min与max之间生成一个随机数（0.5到2之间）
+            w = int(scale * ratio * width)  # 放缩宽 最小0.05，最大2
+            h = int((scale / ratio) * height)  # 放缩高 最小0.05 最大2
 
             l = random.randrange(width - w)
             t = random.randrange(height - h)
@@ -65,7 +65,7 @@ def _crop(image, boxes, labels):
 
             centers = (boxes[:, :2] + boxes[:, 2:]) / 2
             mask = np.logical_and(roi[:2] < centers, centers < roi[2:]) \
-                     .all(axis=1)
+                .all(axis=1)
             boxes_t = boxes[mask].copy()
             labels_t = labels[mask].copy()
             if len(boxes_t) == 0:
@@ -109,23 +109,23 @@ def _distort(image):
     return image
 
 
-def _expand(image, boxes, fill, p):
+def _expand(image, boxes, fill, p):  # 扩张原始图像
     if random.random() > p:
         return image, boxes
 
     height, width, depth = image.shape
     for _ in range(50):
-        scale = random.uniform(1, 4)
+        scale = random.uniform(1, 4)  # 随机产生一个1到4倍的放大
 
-        min_ratio = max(0.5, 1. / scale / scale)
-        max_ratio = min(2, scale * scale)
-        ratio = math.sqrt(random.uniform(min_ratio, max_ratio))
+        min_ratio = max(0.5, 1. / scale / scale)  # 0.5到1
+        max_ratio = min(2, scale * scale)  # 1到2
+        ratio = math.sqrt(random.uniform(min_ratio, max_ratio))  # 0.5到2
         ws = scale * ratio
         hs = scale / ratio
         if ws < 1 or hs < 1:
             continue
-        w = int(ws * width)
-        h = int(hs * height)
+        w = int(ws * width)  # 放大1到8倍
+        h = int(hs * height)  # 放大1到8倍
 
         left = random.randint(0, w - width)
         top = random.randint(0, h - height)
@@ -177,7 +177,7 @@ class preproc(object):
         boxes = targets[:, :-1].copy()
         labels = targets[:, -1].copy()
         if len(boxes) == 0:
-            #boxes = np.empty((0, 4))
+            # boxes = np.empty((0, 4))
             targets = np.zeros((1, 5))
             image = preproc_for_test(image, self.resize_wh, self.means)
             return torch.from_numpy(image), targets
@@ -196,7 +196,7 @@ class preproc(object):
         image_t = _distort(image_t)
         image_t, boxes = _expand(image_t, boxes, self.means, self.p)
         image_t, boxes = _mirror(image_t, boxes)
-        #image_t, boxes = _mirror(image, boxes)
+        # image_t, boxes = _mirror(image, boxes)
 
         height, width, _ = image_t.shape
         image_t = preproc_for_test(image_t, self.resize_wh, self.means)
@@ -242,7 +242,6 @@ class BaseTransform(object):
 
     # assume input is cv2 img for now
     def __call__(self, img, target=None):
-
         interp_methods = [
             cv2.INTER_LINEAR, cv2.INTER_CUBIC, cv2.INTER_AREA,
             cv2.INTER_NEAREST, cv2.INTER_LANCZOS4
