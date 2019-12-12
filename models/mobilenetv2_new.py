@@ -3,6 +3,7 @@ import math
 import torch
 import torch.nn.functional as F
 
+
 # Modified from https://github.com/tonylins/pytorch-mobilenet-v2/blob/master/MobileNetV2.py.
 # In this version, Relu6 is replaced with Relu to make it ONNX compatible.
 # BatchNorm Layer is optional to make it easy do batch norm confusion.
@@ -11,22 +12,21 @@ import torch.nn.functional as F
 def add_extras(size, in_channel, batch_norm=False):
     # Extra layers added to resnet for feature scaling
     layers = []
+    # conv_layer conv8_2
     layers += [nn.Conv2d(in_channel, 256, kernel_size=1, stride=1)]
     layers += [nn.Conv2d(256, 512, kernel_size=3, stride=2, padding=1)]
+    # conv_layer conv9_2
     layers += [nn.Conv2d(512, 256, kernel_size=1, stride=1)]
     layers += [nn.Conv2d(256, 512, kernel_size=3, stride=2, padding=1)]
-    layers += [nn.Conv2d(512, 128, kernel_size=1, stride=1)]
-    layers += [nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)]
-    # if size == '300':
-    layers += [nn.Conv2d(256, 128, kernel_size=1, stride=1)]
-    layers += [nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)]
-    # else:
-    #     layers += [nn.Conv2d(256, 128, kernel_size=1, stride=1)]
-    #     layers += [nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)]
-    #     layers += [nn.Conv2d(256, 128, kernel_size=1, stride=1)]
-    #     layers += [nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)]
+    # conv_layer conv10_2
+    # layers += [nn.Conv2d(512, 128, kernel_size=1, stride=1)]
+    # layers += [nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)]
+    # conv_layer conv11_2
+    # layers += [nn.Conv2d(256, 128, kernel_size=1, stride=1)]
+    # layers += [nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)]
 
     return layers
+
 
 def conv_bn(inp, oup, stride, use_batch_norm=True, onnx_compatible=False):
     ReLU = nn.ReLU if onnx_compatible else nn.ReLU6
@@ -179,7 +179,7 @@ class MobileNetV2(nn.Module):
 
     def forward(self, x):
         sources = list()
-        for i in range(14):
+        for i in range(14):  # 执行主干网络的前14层
             x = self.features[i](x)
         # sources.append(x)
 
@@ -187,20 +187,21 @@ class MobileNetV2(nn.Module):
         #     x = self.features[i](x)
         # sources.append(x)
 
-        for i in range(3):
+        for i in range(3):  # 执行主干网络的第15层，执行bottelneck的第一部分（共三部分）升维
             x = self.features[14].conv[i](x)
-        sources.append(x)
+        sources.append(x)  # 将该层的feature map作为第一层，加入SSD中
+
         for i in range(3, len(self.features[14].conv)):
             x = self.features[14].conv[i](x)
 
         for i in range(15, len(self.features)):
             x = self.features[i](x)
-        sources.append(x)
+        sources.append(x)  # 将该层的feature map作为第二层，加入SSD中
 
         for k, v in enumerate(self.extras):
             x = F.relu(v(x), inplace=True)
             if k % 2 == 1:
-                sources.append(x)
+                sources.append(x)  # 将extra的奇数层的feature map加入SSD中，extra共4层，SSD一共收到6层
 
         return sources
 
@@ -219,21 +220,25 @@ class MobileNetV2(nn.Module):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
 
+
 def SSDMobilenetv2(size, channel_size='48'):
     return MobileNetV2(size=size)
 
+
 if __name__ == "__main__":
     import os
+
+    '''临时创建主函数检测网络结构'''
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-    model3 = SSDMobilenetv2(size=512)
+    modelv2 = SSDMobilenetv2(size=512)
     checkpoint = torch.load('../weights/pretrained_models/mb2-imagenet-71_8.pth')
-    model3.features.load_state_dict(checkpoint)
+    modelv2.features.load_state_dict(checkpoint)
     with torch.no_grad():
-        model3.eval()
+        modelv2.eval()
         x = torch.randn(1, 3, 512, 512)
-        model3(x)
+        modelv2(x)
         import time
         st = time.time()
         for i in range(1):
-            model3(x)
+            modelv2(x)
         print(time.time() - st)
