@@ -6,7 +6,7 @@ from torch.autograd import Variable
 from utils.box_utils import match, log_sum_exp, decode
 from .focal_loss_softmax import FocalLossSoftmax
 from .focal_loss_sigmoid import FocalLossSigmoid
-from .weight_GIoU_loss import bbox_overlaps
+from .weight_GIoU_loss import iou_giou_loss
 
 GPU = False
 if torch.cuda.is_available():
@@ -126,16 +126,16 @@ class MultiBoxLoss(nn.Module):
         if num_pos.data.sum() > 0:
             pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_data)
             priors = priors.unsqueeze(0).expand_as(loc_data)
-            priors_pos = priors[pos_idx].view(-1, 4)
 
             loc_p = loc_data[pos_idx].view(-1, 4)
             loc_t = loc_t[pos_idx].view(-1, 4)
             '''采用Smooth L1 Loss'''
             # loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
             '''采用GIoU Loss'''
-            giou_loc_p = decode(loc_p, priors_pos, self.variance)
-            giou_loc_t = decode(loc_t, priors_pos, self.variance)
-            loss_l = torch.mean(bbox_overlaps(giou_loc_p, giou_loc_t, mode='giou'))
+            priors_pos = priors[pos_idx].view(-1, 4)
+            giou_loc_p = decode(loc_p, priors_pos, self.variance) * 512
+            giou_loc_t = decode(loc_t, priors_pos, self.variance) * 512
+            loss_l = torch.mean(iou_giou_loss(giou_loc_p, giou_loc_t))
 
             N = (num_pos.data.sum() + num_neg.data.sum()) / 2
         else:
