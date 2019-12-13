@@ -143,6 +143,7 @@ class MultiBoxLoss(nn.Module):
             N = num_pos.data.sum() + num_neg.data.sum()
             print('Warning, num_pos == 0')
 
-        loss_l /= float(N)
+        loss_l = loss_l  # 适用于计算GIoU的loss
+        # loss_l /= float(N)  # 适用于计算Smooth L1的loss
         loss_c /= float(N)
         return loss_l, loss_c
