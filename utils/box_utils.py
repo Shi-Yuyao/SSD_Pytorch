@@ -204,6 +204,7 @@ def match(threshold, truths, priors, variances, labels, loc_t, conf_t, idx):
     matches = truths[best_truth_idx]  # Shape: [num_priors,4]
     conf = labels[best_truth_idx]  # Shape: [num_priors]
     conf[best_truth_overlap < threshold] = 0  # label as background
+    # conf[:] = 1
     loc = encode(matches, priors, variances)
     loc_t[idx] = loc  # [num_priors,4] encoded offsets to learn
     conf_t[idx] = conf  # [num_priors] top class label for each prior
@@ -325,8 +326,7 @@ def encode_multi(matched, priors, offsets, variances):
     """
 
     # dist b/t match center and prior's center
-    g_cxcy = (
-                     matched[:, :2] + matched[:, 2:]) / 2 - priors[:, :2] - offsets[:, :2]
+    g_cxcy = (matched[:, :2] + matched[:, 2:]) / 2 - priors[:, :2] - offsets[:, :2]
     # encode variance
     # g_cxcy /= (variances[0] * priors[:, 2:])
     g_cxcy.div_(variances[0] * offsets[:, 2:])
@@ -337,7 +337,6 @@ def encode_multi(matched, priors, offsets, variances):
     return torch.cat([g_cxcy, g_wh], 1)  # [num_priors,4]
 
 
-# Adapted from https://github.com/Hakuyume/chainer-ssd
 def decode(loc, priors, variances):
     """Decode locations from predictions using priors to undo
     the encoding we did for offset regression at train time.
@@ -352,10 +351,10 @@ def decode(loc, priors, variances):
     """
 
     boxes = torch.cat(
-        (priors[:, :2] + loc[:, :2] * variances[0] * priors[:, 2:],
-         priors[:, 2:] * torch.exp(loc[:, 2:] * variances[1])), 1)
-    boxes[:, :2] -= boxes[:, 2:] / 2
-    boxes[:, 2:] += boxes[:, :2]
+        (priors[:, :2] + loc[:, :2] * variances[0] * priors[:, 2:],  # Cx,Cy
+         priors[:, 2:] * torch.exp(loc[:, 2:] * variances[1])), 1)  # W,H
+    boxes[:, :2] -= boxes[:, 2:] / 2  # 复位左上角坐标
+    boxes[:, 2:] += boxes[:, :2]  # 复位右下角坐标
     return boxes
 
 
@@ -388,6 +387,7 @@ def log_sum_exp(x):
     Args:
         x (Variable(tensor)): conf_preds from conf layers
     """
+
     x_max = x.data.max()
     return torch.log(torch.sum(torch.exp(x - x_max), 1, keepdim=True)) + x_max
 
