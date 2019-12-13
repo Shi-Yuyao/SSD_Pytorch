@@ -1,7 +1,7 @@
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-import torch
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+import torch.cuda.nvtx
 import torch.nn as nn
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
@@ -218,15 +218,16 @@ def main():
     mean_tt = np.mean(transform_list) * 1000  # 转化量纲为毫秒
     mean_it = np.mean(inference_list) * 1000
     mean_dt = np.mean(detection_list) * 1000
+    one_pic_tt = mean_tt / batch_size
     one_pic_it = mean_it / batch_size
     one_pic_dt = mean_dt / batch_size
-    print("mean time: "
-          "batch transfer_time: {:.3f}ms\n"
+    print("batch transfer_time: {:.3f}ms\n"
           "batch inference_time: {:.3f}ms\n"
           "batch detection_time: {:.3f}ms\n"
-          "one image inference_time: {:.3f}ms"
+          "one image transform_time: {:.3f}ms\n"
+          "one image inference_time: {:.3f}ms\n"
           "one image detection_time: {:.3f}ms".
-          format(mean_tt, mean_it, mean_dt, one_pic_it, one_pic_dt))
+          format(mean_tt, mean_it, mean_dt, one_pic_tt, one_pic_it, one_pic_dt))
 
 
 if __name__ == '__main__':
