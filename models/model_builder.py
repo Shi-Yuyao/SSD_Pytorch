@@ -33,6 +33,78 @@ def get_func(func_name):
         raise
 
 
+class DepthWiseConv(nn.Module):
+    """
+    深度可分离卷积 = 深度卷积 + 逐点卷积
+    继承nn.Module类，input为：W × H × M(channel)
+                    kernel为：k × k × M(channel) × N(amount)
+                    output为：i × j × N(channel)
+    深度卷积：
+        卷积核大小为：k × k × 1，数量为：M，将input分成 M 组进行卷积后合成：i × j × M，即为tmp
+    逐点卷积：
+        卷积核大小为：1 × 1 × M，数量为；N，对temp卷积后得到：i × j × N
+    """
+
+    def __init__(self, in_channel, out_channel):
+        super(DepthWiseConv, self).__init__()
+        # 深度卷积
+        self.depth_conv = nn.Conv2d(
+            in_channels=in_channel,
+            out_channels=in_channel,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            groups=in_channel
+        )
+        # 逐点卷积
+        self.point_conv = nn.Conv2d(
+            in_channels=in_channel,
+            out_channels=out_channel,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            groups=1
+        )
+
+    def forward(self, input):
+        tmp = self.depth_conv(input)
+        output = self.point_conv(tmp)
+        return output
+
+
+def depthwise_conv(in_channel, out_channel):
+    """
+        深度可分离卷积 = 深度卷积 + 逐点卷积
+        继承nn.Module类，input为：W × H × M(channel)
+                        kernel为：k × k × M(channel) × N(amount)
+                        output为：i × j × N(channel)
+        深度卷积：
+            卷积核大小为：k × k × 1，数量为：M，将input分成 M 组进行卷积后合成：i × j × M，即为tmp
+        逐点卷积：
+            卷积核大小为：1 × 1 × M，数量为；N，对temp卷积后得到：i × j × N
+        """
+    layers = []
+    # depth conv 深度卷积
+    layers += [nn.Conv2d(
+        in_channels=in_channel,
+        out_channels=in_channel,
+        kernel_size=3,
+        stride=1,
+        padding=1,
+        groups=in_channel
+    )]
+    # point conv 逐点卷积
+    layers += [nn.Conv2d(
+        in_channels=in_channel,
+        out_channels=out_channel,
+        kernel_size=1,
+        stride=1,
+        padding=0,
+        groups=1
+    )]
+    return layers
+
+
 class SSD(nn.Module):
     """Single Shot Multibox Architecture
     The network is composed of a base VGG network followed by the
@@ -122,20 +194,24 @@ class SSD(nn.Module):
                         padding=1)
                 ]
             else:
-                self.arm_loc += [
-                    nn.Conv2d(
-                        self.arm_channels[i],
-                        self.num_anchors[i] * 4,
-                        kernel_size=3,
-                        padding=1)
-                ]
-                self.arm_conf += [
-                    nn.Conv2d(
-                        self.arm_channels[i],
-                        self.num_anchors[i] * self.num_classes,
-                        kernel_size=3,
-                        padding=1)
-                ]
+                arm_channels = self.arm_channels[i]
+                num_anchors = self.num_anchors[i]
+                self.arm_loc += depthwise_conv(arm_channels, num_anchors)
+                self.arm_conf += depthwise_conv(arm_channels, num_anchors)
+                # self.arm_loc += [
+                #     nn.Conv2d(
+                #         self.arm_channels[i],  # input channels
+                #         self.num_anchors[i] * 4,  # output channels/位置预测的数量
+                #         kernel_size=3,
+                #         padding=1)
+                # ]
+                # self.arm_conf += [
+                #     nn.Conv2d(
+                #         self.arm_channels[i],  # input channels
+                #         self.num_anchors[i] * self.num_classes,  # output channels/分类置信度的数量
+                #         kernel_size=3,
+                #         padding=1)
+                # ]
         if cfg.TRAIN.TRAIN_ON:
             self._init_modules()
 
