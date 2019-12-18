@@ -36,88 +36,120 @@ class PriorBox(object):
                 raise ValueError('Variances must be greater than 0')
 
     def forward(self):
-        mean = []
         anchors = []
         for k, f in enumerate(self.feature_maps):
-            # 采用shift移动anchor位置,增加anchor的数量,提升anchor的平铺密度
-            min_sizes = self.min_sizes
-            for i, j in product(range(f[0]), range(f[1])):
-                for min_size in min_sizes:
-                    s_k_w = min_size / self.img_wh[0]
-                    s_k_h = min_size / self.img_wh[1]
-                    if min_size == min_sizes[0]:
-                        dense_cx = [x * self.steps[k][0] / self.img_wh[0] for x in
-                                    [j + 0, j + 0.25, j + 0.5, j + 0.75]]
-                        dense_cy = [y * self.steps[k][1] / self.img_wh[1] for y in
-                                    [i + 0, i + 0.25, i + 0.5, i + 0.75]]
-                        for cy, cx in product(dense_cy, dense_cx):
-                            anchors += [cx, cy, s_k_w, s_k_h]
-                            if self.use_max_sizes:
-                                s_k_prime_w = sqrt(s_k_w * (self.max_sizes[k] / self.img_wh[0]))
-                                s_k_prime_h = sqrt(s_k_h * (self.max_sizes[k] / self.img_wh[1]))
-                                anchors += [cx, cy, s_k_prime_w, s_k_prime_h]
-                            for ar in self.aspect_ratios[k]:
-                                anchors += [cx, cy, s_k_w * sqrt(ar), s_k_h / sqrt(ar)]
-                    elif min_size == min_sizes[1]:
-                        dense_cx = [x * self.steps[k][0] / self.img_wh[0] for x in
-                                    [j + 0, j + 0.25, j + 0.5, j + 0.75]]
-                        dense_cy = [y * self.steps[k][1] / self.img_wh[1] for y in
-                                    [i + 0, i + 0.25, i + 0.5, i + 0.75]]
-                        for cy, cx in product(dense_cy, dense_cx):
-                            anchors += [cx, cy, s_k_w, s_k_h]
-                            if self.use_max_sizes:
-                                s_k_prime_w = sqrt(s_k_w * (self.max_sizes[k] / self.img_wh[0]))
-                                s_k_prime_h = sqrt(s_k_h * (self.max_sizes[k] / self.img_wh[1]))
-                                anchors += [cx, cy, s_k_prime_w, s_k_prime_h]
-                            for ar in self.aspect_ratios[k]:
-                                anchors += [cx, cy, s_k_w * sqrt(ar), s_k_h / sqrt(ar)]
-                    else:
-                        cx = (j + 0.5) * self.steps[k][0] / self.img_wh[0]
-                        cy = (i + 0.5) * self.steps[k][1] / self.img_wh[1]
+            if f[0] == 32:
+                for i, j in product(range(f[0]), range(f[1])):
+                    # unit center x,y
+                    dense_cx = [x * self.steps[k][0] / self.img_wh[0] for x in
+                                [j + 0, j + 0.25, j + 0.5, j + 0.75]]
+                    dense_cy = [y * self.steps[k][1] / self.img_wh[1] for y in
+                                [i + 0, i + 0.25, i + 0.5, i + 0.75]]
+                    for cx, cy in product(dense_cx, dense_cy):
+                        # aspect_ratio: 1
+                        # rel size: min_size
+                        s_k_h = self.min_sizes[k] / self.img_wh[1]
+                        s_k_w = self.min_sizes[k] / self.img_wh[0]
                         anchors += [cx, cy, s_k_w, s_k_h]
+
+                        # aspect_ratio: 1
+                        # rel size: sqrt(s_k * s_(k+1))
                         if self.use_max_sizes:
-                            s_k_prime_w = sqrt(s_k_w * (self.max_sizes[k] / self.img_wh[0]))
-                            s_k_prime_h = sqrt(s_k_h * (self.max_sizes[k] / self.img_wh[1]))
+                            s_k_prime_w = sqrt(
+                                s_k_w * (self.max_sizes[k] / self.img_wh[0]))
+                            s_k_prime_h = sqrt(
+                                s_k_h * (self.max_sizes[k] / self.img_wh[1]))
                             anchors += [cx, cy, s_k_prime_w, s_k_prime_h]
+
+                        # aspect_ratio: config
                         for ar in self.aspect_ratios[k]:
                             anchors += [cx, cy, s_k_w * sqrt(ar), s_k_h / sqrt(ar)]
+            elif f[0] == 16:
+                for i, j in product(range(f[0]), range(f[1])):
+                    # unit center x,y
+                    dense_cx = [x * self.steps[k][0] / self.img_wh[0] for x in
+                                [j + 0, j + 0.25, j + 0.5, j + 0.75]]
+                    dense_cy = [y * self.steps[k][1] / self.img_wh[1] for y in
+                                [i + 0, i + 0.25, i + 0.5, i + 0.75]]
+                    for cx, cy in product(dense_cx, dense_cy):
+                        # aspect_ratio: 1
+                        # rel size: min_size
+                        s_k_h = self.min_sizes[k] / self.img_wh[1]
+                        s_k_w = self.min_sizes[k] / self.img_wh[0]
+                        anchors += [cx, cy, s_k_w, s_k_h]
 
-            # 原始配置
-            # grid_h, grid_w = f[1], f[0]
-            # for i in range(grid_h):
-            #     for j in range(grid_w):
-            #         # self.steps为下采样率
-            #         f_k_h = self.img_wh[1] / self.steps[k][1]
-            #         f_k_w = self.img_wh[0] / self.steps[k][0]
-            #         # unit center x,y
-            #         cx = (j + 0.5) / f_k_w
-            #         cy = (i + 0.5) / f_k_h
-            #
-            #         # aspect_ratio: 1
-            #         # rel size: min_size
-            #         # 使用min_size的正方形anchor的宽高
-            #         s_k_h = self.min_sizes[k] / self.img_wh[1]
-            #         s_k_w = self.min_sizes[k] / self.img_wh[0]
-            #         mean += [cx, cy, s_k_w, s_k_h]
-            #
-            #         # aspect_ratio: 1
-            #         # rel size: sqrt(s_k * s_(k+1))
-            #         # 使用max_size的正方形anchor的宽高
-            #         if self.use_max_sizes:
-            #             s_k_prime_w = sqrt(
-            #                 s_k_w * (self.max_sizes[k] / self.img_wh[0]))
-            #             s_k_prime_h = sqrt(
-            #                 s_k_h * (self.max_sizes[k] / self.img_wh[1]))
-            #             mean += [cx, cy, s_k_prime_w, s_k_prime_h]
-            #
-            #         # 使用设置比例的anchor的宽高
-            #         for ar in self.aspect_ratios[k]:
-            #             mean += [cx, cy, s_k_w * sqrt(ar), s_k_h / sqrt(ar)]
+                        # aspect_ratio: 1
+                        # rel size: sqrt(s_k * s_(k+1))
+                        if self.use_max_sizes:
+                            s_k_prime_w = sqrt(
+                                s_k_w * (self.max_sizes[k] / self.img_wh[0]))
+                            s_k_prime_h = sqrt(
+                                s_k_h * (self.max_sizes[k] / self.img_wh[1]))
+                            anchors += [cx, cy, s_k_prime_w, s_k_prime_h]
+
+                        # aspect_ratio: config
+                        for ar in self.aspect_ratios[k]:
+                            anchors += [cx, cy, s_k_w * sqrt(ar), s_k_h / sqrt(ar)]
+            else:
+                for i, j in product(range(f[0]), range(f[1])):
+                    f_k_h = self.img_wh[1] / self.steps[k][1]
+                    f_k_w = self.img_wh[0] / self.steps[k][0]
+                    # unit center x,y
+                    cx = (j + 0.5) / f_k_w
+                    cy = (i + 0.5) / f_k_h
+
+                    # aspect_ratio: 1
+                    # rel size: min_size
+                    s_k_h = self.min_sizes[k] / self.img_wh[1]
+                    s_k_w = self.min_sizes[k] / self.img_wh[0]
+                    anchors += [cx, cy, s_k_w, s_k_h]
+
+                    # aspect_ratio: 1
+                    # rel size: sqrt(s_k * s_(k+1))
+                    if self.use_max_sizes:
+                        s_k_prime_w = sqrt(
+                            s_k_w * (self.max_sizes[k] / self.img_wh[0]))
+                        s_k_prime_h = sqrt(
+                            s_k_h * (self.max_sizes[k] / self.img_wh[1]))
+                        anchors += [cx, cy, s_k_prime_w, s_k_prime_h]
+
+                    for ar in self.aspect_ratios[k]:
+                        anchors += [cx, cy, s_k_w * sqrt(ar), s_k_h / sqrt(ar)]
+
+        # 原始配置
+        # mean = []
+        # for k, f in enumerate(self.feature_maps):
+        #     grid_h, grid_w = f[1], f[0]
+        #     for i in range(grid_h):
+        #         for j in range(grid_w):
+        #             f_k_h = self.img_wh[1] / self.steps[k][1]
+        #             f_k_w = self.img_wh[0] / self.steps[k][0]
+        #             # unit center x,y
+        #             cx = (j + 0.5) / f_k_w
+        #             cy = (i + 0.5) / f_k_h
+        #
+        #             # aspect_ratio: 1
+        #             # rel size: min_size
+        #             s_k_h = self.min_sizes[k] / self.img_wh[1]
+        #             s_k_w = self.min_sizes[k] / self.img_wh[0]
+        #             mean += [cx, cy, s_k_w, s_k_h]
+        #
+        #             # aspect_ratio: 1
+        #             # rel size: sqrt(s_k * s_(k+1))
+        #             if self.use_max_sizes:
+        #                 s_k_prime_w = sqrt(
+        #                     s_k_w * (self.max_sizes[k] / self.img_wh[0]))
+        #                 s_k_prime_h = sqrt(
+        #                     s_k_h * (self.max_sizes[k] / self.img_wh[1]))
+        #                 mean += [cx, cy, s_k_prime_w, s_k_prime_h]
+        #
+        #             for ar in self.aspect_ratios[k]:
+        #                 mean += [cx, cy, s_k_w * sqrt(ar), s_k_h / sqrt(ar)]
 
         # back to torch land
         # output = torch.Tensor(mean).view(-1, 4)
         output = torch.Tensor(anchors).view(-1, 4)
         if self.clip:
             output.clamp_(max=1, min=0)
-        print(output.size())
+        # print(output.size())
         return output
