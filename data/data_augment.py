@@ -45,7 +45,7 @@ def _crop(image, boxes, labels):  # crop原始图像增加训练图像的数量
             max_iou = float('inf')
 
         for _ in range(50):  # 随机尝试50次
-            scale = random.uniform(0.1, 1.)  # 放大的尺度随机到0.1到1之间
+            scale = random.uniform(0.8, 1.)  # 放大的尺度随机到0.7到1之间
             min_ratio = max(0.5, scale * scale)  # min的范围为0.5到1
             max_ratio = min(2, 1. / scale / scale)  # max的范围为1到2
             ratio = math.sqrt(random.uniform(min_ratio, max_ratio))  # 在min与max之间生成一个随机数（0.5到2之间）
@@ -115,7 +115,7 @@ def _expand(image, boxes, fill, p):  # 扩张原始图像
 
     height, width, depth = image.shape
     for _ in range(50):
-        scale = random.uniform(1, 4)  # 随机产生一个1到4倍的放大
+        scale = random.uniform(1, 2)  # 随机产生一个1到2倍的放大(相当于将原图缩小1到2倍)
 
         min_ratio = max(0.5, 1. / scale / scale)  # 0.5到1
         max_ratio = min(2, scale * scale)  # 1到2
@@ -124,8 +124,8 @@ def _expand(image, boxes, fill, p):  # 扩张原始图像
         hs = scale / ratio
         if ws < 1 or hs < 1:
             continue
-        w = int(ws * width)  # 放大1到8倍
-        h = int(hs * height)  # 放大1到8倍
+        w = int(ws * width)
+        h = int(hs * height)
 
         left = random.randint(0, w - width)
         top = random.randint(0, h - height)
