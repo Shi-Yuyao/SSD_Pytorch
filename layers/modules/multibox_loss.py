@@ -117,25 +117,31 @@ class MultiBoxLoss(nn.Module):
             conf_p = conf_data[(pos_idx + neg_idx).gt(0)].view(
                 -1, self.num_classes)
             targets_weighted = conf_t[(pos + neg).gt(0)]
+
+            '''分配交叉熵的权重'''
+            class_weight = torch.tensor([1.0, 4.432720232, 9.9381443298, 1.0, 6.6555232558]).cuda()
+            '''使用权重'''
             loss_c = F.cross_entropy(
-                conf_p, targets_weighted, size_average=False)
+                conf_p, targets_weighted, weight=class_weight, size_average=False)
+
         else:
             loss_c = F.cross_entropy(conf_p, conf_t, size_average=False)
         # Localization Loss (Smooth L1/GIoU)
         # Shape: [batch,num_priors,4]
         if num_pos.data.sum() > 0:
             pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_data)
-            priors = priors.unsqueeze(0).expand_as(loc_data)
-
             loc_p = loc_data[pos_idx].view(-1, 4)
             loc_t = loc_t[pos_idx].view(-1, 4)
+
             '''采用Smooth L1 Loss'''
-            # loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
+            loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
+
             '''采用GIoU Loss'''
-            priors_pos = priors[pos_idx].view(-1, 4)
-            giou_loc_p = decode(loc_p, priors_pos, self.variance) * 512
-            giou_loc_t = decode(loc_t, priors_pos, self.variance) * 512
-            loss_l = torch.mean(iou_giou_loss(giou_loc_p, giou_loc_t))
+            # priors = priors.unsqueeze(0).expand_as(loc_data)
+            # priors_pos = priors[pos_idx].view(-1, 4)
+            # giou_loc_p = decode(loc_p, priors_pos, self.variance) * 512
+            # giou_loc_t = decode(loc_t, priors_pos, self.variance) * 512
+            # loss_l = torch.mean(iou_giou_loss(giou_loc_p, giou_loc_t))
 
             N = (num_pos.data.sum() + num_neg.data.sum()) / 2
         else:
@@ -143,7 +149,7 @@ class MultiBoxLoss(nn.Module):
             N = num_pos.data.sum() + num_neg.data.sum()
             print('Warning, num_pos == 0')
 
-        loss_l = loss_l  # 适用于计算GIoU的loss
-        # loss_l /= float(N)  # 适用于计算Smooth L1的loss
+        # loss_l = loss_l  # 适用于计算GIoU的loss
+        loss_l /= float(N)  # 适用于计算Smooth L1的loss
         loss_c /= float(N)
         return loss_l, loss_c
