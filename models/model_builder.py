@@ -194,10 +194,38 @@ class SSD(nn.Module):
                         padding=1)
                 ]
             else:
-                arm_channels = self.arm_channels[i]
-                num_anchors = self.num_anchors[i]
-                self.arm_loc += depthwise_conv(arm_channels, num_anchors)
-                self.arm_conf += depthwise_conv(arm_channels, num_anchors)
+                # 深度卷积
+                depth_conv = nn.Conv2d(
+                    in_channels=self.arm_channels[i],
+                    out_channels=self.arm_channels[i],
+                    kernel_size=3,
+                    stride=1,
+                    padding=1,
+                    groups=self.arm_channels[i]
+                )
+                # 逐点卷积(位置)
+                point_l_conv = nn.Conv2d(
+                    in_channels=self.arm_channels[i],
+                    out_channels=self.num_anchors[i] * 4,
+                    kernel_size=1,
+                    stride=1,
+                    padding=0,
+                    groups=1
+                )
+                # 逐点卷积(分类)
+                point_c_conv = nn.Conv2d(
+                    in_channels=self.arm_channels[i],
+                    out_channels=self.num_anchors[i] * self.num_classes,
+                    kernel_size=1,
+                    stride=1,
+                    padding=0,
+                    groups=1
+                )
+                loc = nn.Sequential(depth_conv, point_l_conv)
+                conf = nn.Sequential(depth_conv, point_c_conv)
+                self.arm_loc.append(loc)
+                self.arm_conf.append(conf)
+
                 # self.arm_loc += [
                 #     nn.Conv2d(
                 #         self.arm_channels[i],  # input channels
