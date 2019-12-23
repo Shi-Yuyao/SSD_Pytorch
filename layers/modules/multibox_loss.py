@@ -79,10 +79,22 @@ class MultiBoxLoss(nn.Module):
         for idx in range(num):
             truths = targets[idx][:, :-1].data
             labels = targets[idx][:, -1].data
+            '''对money和scanner这两个小目标的w与h放大1.5倍'''
+            truths_new = truths.clone()
+            label = labels.cpu().numpy().tolist()
+            for i in label:
+                if i == 1.0:
+                    truths_new[:, 2] = truths_new[:, 2] * 1.5
+                    truths_new[:, 3] = truths_new[:, 3] * 1.5
+                if i == 4.0:
+                    truths_new[:, 2] = truths_new[:, 2] * 1.5
+                    truths_new[:, 3] = truths_new[:, 3] * 1.5
             if self.num_classes == 2:
                 labels = labels > 0
             defaults = priors.data
-            match(self.threshold, truths, defaults, self.variance, labels,
+            # match(self.threshold, truths, defaults, self.variance, labels,
+            #       loc_t, conf_t, idx)
+            match(self.threshold, truths_new, defaults, self.variance, labels,
                   loc_t, conf_t, idx)
         loc_t = loc_t.cuda()
         conf_t = conf_t.cuda()
@@ -119,7 +131,7 @@ class MultiBoxLoss(nn.Module):
             targets_weighted = conf_t[(pos + neg).gt(0)]
 
             '''分配交叉熵的权重'''
-            class_weight = torch.tensor([1.0, 4.432720232, 9.9381443298, 1.0, 6.6555232558]).cuda()
+            class_weight = torch.tensor([1.0, 5.0, 9.95, 2.0, 6.65]).cuda()
             '''使用权重'''
             loss_c = F.cross_entropy(
                 conf_p, targets_weighted, weight=class_weight, size_average=False)
@@ -134,14 +146,14 @@ class MultiBoxLoss(nn.Module):
             loc_t = loc_t[pos_idx].view(-1, 4)
 
             '''采用Smooth L1 Loss'''
-            loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
+            # loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
 
             '''采用GIoU Loss'''
-            # priors = priors.unsqueeze(0).expand_as(loc_data)
-            # priors_pos = priors[pos_idx].view(-1, 4)
-            # giou_loc_p = decode(loc_p, priors_pos, self.variance) * 512
-            # giou_loc_t = decode(loc_t, priors_pos, self.variance) * 512
-            # loss_l = torch.mean(iou_giou_loss(giou_loc_p, giou_loc_t))
+            priors = priors.unsqueeze(0).expand_as(loc_data)
+            priors_pos = priors[pos_idx].view(-1, 4)
+            giou_loc_p = decode(loc_p, priors_pos, self.variance) * 512
+            giou_loc_t = decode(loc_t, priors_pos, self.variance) * 512
+            loss_l = torch.mean(iou_giou_loss(giou_loc_p, giou_loc_t))
 
             N = (num_pos.data.sum() + num_neg.data.sum()) / 2
         else:
@@ -150,6 +162,6 @@ class MultiBoxLoss(nn.Module):
             print('Warning, num_pos == 0')
 
         # loss_l = loss_l  # 适用于计算GIoU的loss
-        loss_l /= float(N)  # 适用于计算Smooth L1的loss
+        # loss_l /= float(N)  # 适用于计算Smooth L1的loss
         loss_c /= float(N)
         return loss_l, loss_c
