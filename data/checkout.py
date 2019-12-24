@@ -16,11 +16,11 @@ from PIL import Image, ImageDraw, ImageFont
 import cv2
 import numpy as np
 from .voc_eval import voc_eval
+
 if sys.version_info[0] == 2:
     import xml.etree.cElementTree as ET
 else:
     import xml.etree.ElementTree as ET
-
 
 CHECKOUT_CLASSES = (
     '__background__',  # always index 0
@@ -60,7 +60,8 @@ class AnnotationTransform(object):
         Returns:
             a list containing lists of bounding boxes  [bbox coords, class name]
         """
-        res = np.empty((0, 5))
+        # res = np.empty((0, 5))
+        res_new = np.empty((0, 5))
         for obj in target.iter('object'):
             difficult = int(obj.find('difficult').text) == 1
             if not self.keep_difficult and difficult:
@@ -71,20 +72,46 @@ class AnnotationTransform(object):
             pts = ['xmin', 'ymin', 'xmax', 'ymax']
             bndbox = []
             for i, pt in enumerate(pts):
+                '''读取bndbox的pointform值'''
                 cur_pt = int(bbox.find(pt).text) - 1
                 cur_pt = 0 if cur_pt < 0 else cur_pt
                 # scale height or width
                 # cur_pt = cur_pt / width if i % 2 == 0 else cur_pt / height
                 bndbox.append(cur_pt)
+            '''对money和scanner的wh放大1.5倍'''
+            w = bndbox[2] - bndbox[0]
+            h = bndbox[3] - bndbox[1]
+            cx = w / 2 + bndbox[0]
+            cy = h / 2 + bndbox[1]
+            if name == 'money':
+                w_new = w * 1.5
+                h_new = h * 1.5
+                xmin_new = cx - w_new * 1 / 2
+                xmax_new = cx + w_new * 1 / 2
+                ymin_new = cy - h_new * 1 / 2
+                ymax_new = cy + h_new * 1 / 2
+                bndbox_new = [xmin_new, ymin_new, xmax_new, ymax_new]
+            elif name == 'scanner':
+                w_new = w * 1.5
+                h_new = h * 1.5
+                xmin_new = cx - w_new * 1 / 2
+                xmax_new = cx + w_new * 1 / 2
+                ymin_new = cy - h_new * 1 / 2
+                ymax_new = cy + h_new * 1 / 2
+                bndbox_new = [xmin_new, ymin_new, xmax_new, ymax_new]
+            else:
+                bndbox_new = bndbox.copy()
 
             label_idx = self.class_to_ind[name]
-            bndbox.append(label_idx)
+            # bndbox.append(label_idx)
+            bndbox_new.append(label_idx)
             # res += [bndbox]  # [xmin, ymin, xmax, ymax, label_ind]
-            res = np.vstack((res, bndbox))
+            # res = np.vstack((res, bndbox))
+            res_new = np.vstack((res_new, bndbox_new))
             # img_id = target.find('filename').text[:-4]
-        if len(res) == 0:
-            np.vstack((res, [0, 0, 0, 0, 0]))
-        return res  # [[xmin, ymin, xmax, ymax, label_ind], ... ]
+        if len(res_new) == 0:
+            np.vstack((res_new, [0, 0, 0, 0, 0]))
+        return res_new  # [[xmin, ymin, xmax, ymax, label_ind], ... ]
 
 
 class CheckoutDetection(data.Dataset):
@@ -238,8 +265,8 @@ class CheckoutDetection(data.Dataset):
                         f.write(
                             '{:s} {:.3f} {:.1f} {:.1f} {:.1f} {:.1f}\n'.format(
                                 index, dets[k, -1], dets[k, 0] + 1,
-                                dets[k, 1] + 1, dets[k, 2] + 1,
-                                dets[k, 3] + 1))
+                                                    dets[k, 1] + 1, dets[k, 2] + 1,
+                                                    dets[k, 3] + 1))
 
     def _do_python_eval(self, output_dir='output'):
         rootpath = os.path.join(self.root, self._year)
