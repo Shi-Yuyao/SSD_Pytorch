@@ -10,6 +10,7 @@ import pickle
 import numpy as np
 import pdb
 import matplotlib
+
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
@@ -25,14 +26,52 @@ def parse_rec(filename):
         obj_struct['truncated'] = int(obj.find('truncated').text)
         obj_struct['difficult'] = int(obj.find('difficult').text)
         bbox = obj.find('bndbox')
-        obj_struct['bbox'] = [
-            int(bbox.find('xmin').text),
-            int(bbox.find('ymin').text),
-            int(bbox.find('xmax').text),
-            int(bbox.find('ymax').text)
-        ]
-        objects.append(obj_struct)
 
+        '''对money和scanner的wh放大1.5倍'''
+        if obj_struct['name'] == 'money':
+            obj_struct['bbox'] = [
+                int(bbox.find('xmin').text),
+                int(bbox.find('ymin').text),
+                int(bbox.find('xmax').text),
+                int(bbox.find('ymax').text)
+            ]
+            w = obj_struct['bbox'][2] - obj_struct['bbox'][0]
+            h = obj_struct['bbox'][3] - obj_struct['bbox'][1]
+            cx = w / 2 + obj_struct['bbox'][0]
+            cy = h / 2 + obj_struct['bbox'][1]
+            w_new = w * 1.5
+            h_new = h * 1.5
+            xmin_new = max(cx - w_new * 1 / 2, 0)
+            xmax_new = min(cx + w_new * 1 / 2, 1100)
+            ymin_new = max(cy - h_new * 1 / 2, 0)
+            ymax_new = min(cy + h_new * 1 / 2, 800)
+            obj_struct['bbox'] = [xmin_new, ymin_new, xmax_new, ymax_new]
+        elif obj_struct['name'] == 'scanner':
+            obj_struct['bbox'] = [
+                int(bbox.find('xmin').text),
+                int(bbox.find('ymin').text),
+                int(bbox.find('xmax').text),
+                int(bbox.find('ymax').text)
+            ]
+            w = obj_struct['bbox'][2] - obj_struct['bbox'][0]
+            h = obj_struct['bbox'][3] - obj_struct['bbox'][1]
+            cx = w / 2 + obj_struct['bbox'][0]
+            cy = h / 2 + obj_struct['bbox'][1]
+            w_new = w * 1.5
+            h_new = h * 1.5
+            xmin_new = max(cx - w_new * 1 / 2, 0)
+            xmax_new = min(cx + w_new * 1 / 2, 1100)
+            ymin_new = max(cy - h_new * 1 / 2, 0)
+            ymax_new = min(cy + h_new * 1 / 2, 800)
+            obj_struct['bbox'] = [xmin_new, ymin_new, xmax_new, ymax_new]
+        else:
+            obj_struct['bbox'] = [
+                int(bbox.find('xmin').text),
+                int(bbox.find('ymin').text),
+                int(bbox.find('xmax').text),
+                int(bbox.find('ymax').text)
+            ]
+        objects.append(obj_struct)
     return objects
 
 
