@@ -86,18 +86,18 @@ class AnnotationTransform(object):
             if name == 'money':
                 w_new = w * 1.5
                 h_new = h * 1.5
-                xmin_new = cx - w_new * 1 / 2
-                xmax_new = cx + w_new * 1 / 2
-                ymin_new = cy - h_new * 1 / 2
-                ymax_new = cy + h_new * 1 / 2
+                xmin_new = max(cx - w_new * 1 / 2, 0)
+                xmax_new = min(cx + w_new * 1 / 2, 1100)
+                ymin_new = max(cy - h_new * 1 / 2, 0)
+                ymax_new = min(cy + h_new * 1 / 2, 800)
                 bndbox_new = [xmin_new, ymin_new, xmax_new, ymax_new]
             elif name == 'scanner':
                 w_new = w * 1.5
                 h_new = h * 1.5
-                xmin_new = cx - w_new * 1 / 2
-                xmax_new = cx + w_new * 1 / 2
-                ymin_new = cy - h_new * 1 / 2
-                ymax_new = cy + h_new * 1 / 2
+                xmin_new = max(cx - w_new * 1 / 2, 0)
+                xmax_new = min(cx + w_new * 1 / 2, 1100)
+                ymin_new = max(cy - h_new * 1 / 2, 0)
+                ymax_new = min(cy + h_new * 1 / 2, 800)
                 bndbox_new = [xmin_new, ymin_new, xmax_new, ymax_new]
             else:
                 bndbox_new = bndbox.copy()
