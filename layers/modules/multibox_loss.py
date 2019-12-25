@@ -79,23 +79,23 @@ class MultiBoxLoss(nn.Module):
         for idx in range(num):
             truths = targets[idx][:, :-1].data
             labels = targets[idx][:, -1].data
-            '''对money和scanner这两个小目标的w与h放大1.5倍'''
-            truths_new = truths.clone()
-            label = labels.cpu().numpy().tolist()
-            for i in label:
-                if i == 1.0:
-                    truths_new[:, 2] = truths_new[:, 2] * 1.5
-                    truths_new[:, 3] = truths_new[:, 3] * 1.5
-                if i == 4.0:
-                    truths_new[:, 2] = truths_new[:, 2] * 1.5
-                    truths_new[:, 3] = truths_new[:, 3] * 1.5
+            # '''对money和scanner这两个小目标的w与h放大1.5倍计算loss'''
+            # truths_new = truths.clone()
+            # label = labels.cpu().numpy().tolist()
+            # for i in label:
+            #     if i == 1.0:
+            #         truths_new[:, 2] = truths_new[:, 2] * 1.5
+            #         truths_new[:, 3] = truths_new[:, 3] * 1.5
+            #     if i == 4.0:
+            #         truths_new[:, 2] = truths_new[:, 2] * 1.5
+            #         truths_new[:, 3] = truths_new[:, 3] * 1.5
             if self.num_classes == 2:
                 labels = labels > 0
             defaults = priors.data
-            # match(self.threshold, truths, defaults, self.variance, labels,
-            #       loc_t, conf_t, idx)
-            match(self.threshold, truths_new, defaults, self.variance, labels,
+            match(self.threshold, truths, defaults, self.variance, labels,
                   loc_t, conf_t, idx)
+            # match(self.threshold, truths_new, defaults, self.variance, labels,
+            #       loc_t, conf_t, idx)
         loc_t = loc_t.cuda()
         conf_t = conf_t.cuda()
 
@@ -131,7 +131,7 @@ class MultiBoxLoss(nn.Module):
             targets_weighted = conf_t[(pos + neg).gt(0)]
 
             '''分配交叉熵的权重'''
-            class_weight = torch.tensor([1.0, 5.0, 9.95, 2.0, 6.65]).cuda()
+            class_weight = torch.tensor([1.0, 4.43272023233301, 9.938144329896907, 1.0, 6.655523255813954]).cuda()
             '''使用权重'''
             loss_c = F.cross_entropy(
                 conf_p, targets_weighted, weight=class_weight, size_average=False)
