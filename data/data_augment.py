@@ -187,8 +187,8 @@ class preproc(object):
         height_o, width_o, _ = image_o.shape
         boxes_o = targets_o[:, :-1]
         labels_o = targets_o[:, -1]
-        boxes_o[:, 0::2] /= width_o
-        boxes_o[:, 1::2] /= height_o
+        boxes_o[:, 0::2] /= width_o  # xmin,xmax以宽为基准缩放
+        boxes_o[:, 1::2] /= height_o  # ymin,ymax以高为基准缩放
         labels_o = np.expand_dims(labels_o, 1)
         targets_o = np.hstack((boxes_o, labels_o))
 

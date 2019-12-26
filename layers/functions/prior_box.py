@@ -36,6 +36,7 @@ class PriorBox(object):
                 raise ValueError('Variances must be greater than 0')
 
     def forward(self):
+        # shift Anchor
         anchors = []
         for k, f in enumerate(self.feature_maps):
             if f[0] == 32:
