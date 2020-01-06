@@ -194,52 +194,52 @@ class SSD(nn.Module):
                         padding=1)
                 ]
             else:
-                # 深度卷积
-                depth_conv = nn.Conv2d(
-                    in_channels=self.arm_channels[i],
-                    out_channels=self.arm_channels[i],
-                    kernel_size=3,
-                    stride=1,
-                    padding=1,
-                    groups=self.arm_channels[i]
-                )
-                # 逐点卷积(位置)
-                point_l_conv = nn.Conv2d(
-                    in_channels=self.arm_channels[i],
-                    out_channels=self.num_anchors[i] * 4,
-                    kernel_size=1,
-                    stride=1,
-                    padding=0,
-                    groups=1
-                )
-                # 逐点卷积(分类)
-                point_c_conv = nn.Conv2d(
-                    in_channels=self.arm_channels[i],
-                    out_channels=self.num_anchors[i] * self.num_classes,
-                    kernel_size=1,
-                    stride=1,
-                    padding=0,
-                    groups=1
-                )
-                loc = nn.Sequential(depth_conv, point_l_conv)
-                conf = nn.Sequential(depth_conv, point_c_conv)
-                self.arm_loc.append(loc)
-                self.arm_conf.append(conf)
+                # # 深度卷积
+                # depth_conv = nn.Conv2d(
+                #     in_channels=self.arm_channels[i],
+                #     out_channels=self.arm_channels[i],
+                #     kernel_size=3,
+                #     stride=1,
+                #     padding=1,
+                #     groups=self.arm_channels[i]
+                # )
+                # # 逐点卷积(位置)
+                # point_l_conv = nn.Conv2d(
+                #     in_channels=self.arm_channels[i],
+                #     out_channels=self.num_anchors[i] * 4,
+                #     kernel_size=1,
+                #     stride=1,
+                #     padding=0,
+                #     groups=1
+                # )
+                # # 逐点卷积(分类)
+                # point_c_conv = nn.Conv2d(
+                #     in_channels=self.arm_channels[i],
+                #     out_channels=self.num_anchors[i] * self.num_classes,
+                #     kernel_size=1,
+                #     stride=1,
+                #     padding=0,
+                #     groups=1
+                # )
+                # loc = nn.Sequential(depth_conv, point_l_conv)
+                # conf = nn.Sequential(depth_conv, point_c_conv)
+                # self.arm_loc.append(loc)
+                # self.arm_conf.append(conf)
 
-                # self.arm_loc += [
-                #     nn.Conv2d(
-                #         self.arm_channels[i],  # input channels
-                #         self.num_anchors[i] * 4,  # output channels/位置预测的数量
-                #         kernel_size=3,
-                #         padding=1)
-                # ]
-                # self.arm_conf += [
-                #     nn.Conv2d(
-                #         self.arm_channels[i],  # input channels
-                #         self.num_anchors[i] * self.num_classes,  # output channels/分类置信度的数量
-                #         kernel_size=3,
-                #         padding=1)
-                # ]
+                self.arm_loc += [
+                    nn.Conv2d(
+                        self.arm_channels[i],  # input channels
+                        self.num_anchors[i] * 4,  # output channels/位置预测的数量
+                        kernel_size=3,
+                        padding=1)
+                ]
+                self.arm_conf += [
+                    nn.Conv2d(
+                        self.arm_channels[i],  # input channels
+                        self.num_anchors[i] * self.num_classes,  # output channels/分类置信度的数量
+                        kernel_size=3,
+                        padding=1)
+                ]
         if cfg.TRAIN.TRAIN_ON:
             self._init_modules()
 
