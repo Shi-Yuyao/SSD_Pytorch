@@ -131,7 +131,7 @@ class MultiBoxLoss(nn.Module):
             targets_weighted = conf_t[(pos + neg).gt(0)]
 
             '''分配交叉熵的权重'''
-            class_weight = torch.tensor([1.0, 4.43272023233301, 9.938144329896907, 1.0, 6.655523255813954]).cuda()
+            class_weight = torch.tensor([1.0, 4.43272023233301, 1.0, 1.0, 6.655523255813954]).cuda()
             '''使用权重'''
             loss_c = F.cross_entropy(
                 conf_p, targets_weighted, weight=class_weight, size_average=False)
