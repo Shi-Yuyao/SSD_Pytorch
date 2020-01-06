@@ -27,7 +27,15 @@ def parse_rec(filename):
         obj_struct['difficult'] = int(obj.find('difficult').text)
         bbox = obj.find('bndbox')
 
-        '''对money和scanner的wh放大1.5倍'''
+        '''原始配置'''
+        # obj_struct['bbox'] = [
+        #     int(bbox.find('xmin').text),
+        #     int(bbox.find('ymin').text),
+        #     int(bbox.find('xmax').text),
+        #     int(bbox.find('ymax').text)
+        # ]
+
+        '''对money和scanner的wh放大2.0倍'''
         if obj_struct['name'] == 'money':
             obj_struct['bbox'] = [
                 int(bbox.find('xmin').text),
@@ -39,8 +47,8 @@ def parse_rec(filename):
             h = obj_struct['bbox'][3] - obj_struct['bbox'][1]
             cx = w / 2 + obj_struct['bbox'][0]
             cy = h / 2 + obj_struct['bbox'][1]
-            w_new = w * 1.5
-            h_new = h * 1.5
+            w_new = w * 2.0
+            h_new = h * 2.0
             xmin_new = max(cx - w_new * 1 / 2, 0)
             xmax_new = min(cx + w_new * 1 / 2, 1100)
             ymin_new = max(cy - h_new * 1 / 2, 0)
@@ -57,8 +65,8 @@ def parse_rec(filename):
             h = obj_struct['bbox'][3] - obj_struct['bbox'][1]
             cx = w / 2 + obj_struct['bbox'][0]
             cy = h / 2 + obj_struct['bbox'][1]
-            w_new = w * 1.5
-            h_new = h * 1.5
+            w_new = w * 2.0
+            h_new = h * 2.0
             xmin_new = max(cx - w_new * 1 / 2, 0)
             xmax_new = min(cx + w_new * 1 / 2, 1100)
             ymin_new = max(cy - h_new * 1 / 2, 0)
@@ -71,6 +79,7 @@ def parse_rec(filename):
                 int(bbox.find('xmax').text),
                 int(bbox.find('ymax').text)
             ]
+
         objects.append(obj_struct)
     return objects
 
