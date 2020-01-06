@@ -75,25 +75,23 @@ class AnnotationTransform(object):
                 '''读取bndbox的pointform值'''
                 cur_pt = int(bbox.find(pt).text) - 1
                 cur_pt = 0 if cur_pt < 0 else cur_pt
-                # scale height or width
-                # cur_pt = cur_pt / width if i % 2 == 0 else cur_pt / height
                 bndbox.append(cur_pt)
-            '''对money和scanner的wh放大1.5倍'''
+            '''对money和scanner的wh放大2.0倍'''
             w = bndbox[2] - bndbox[0]
             h = bndbox[3] - bndbox[1]
             cx = w / 2 + bndbox[0]
             cy = h / 2 + bndbox[1]
             if name == 'money':
-                w_new = w * 1.5
-                h_new = h * 1.5
+                w_new = w * 2.0
+                h_new = h * 2.0
                 xmin_new = max(cx - w_new * 1 / 2, 0)
                 xmax_new = min(cx + w_new * 1 / 2, 1100)
                 ymin_new = max(cy - h_new * 1 / 2, 0)
                 ymax_new = min(cy + h_new * 1 / 2, 800)
                 bndbox_new = [xmin_new, ymin_new, xmax_new, ymax_new]
             elif name == 'scanner':
-                w_new = w * 1.5
-                h_new = h * 1.5
+                w_new = w * 2.0
+                h_new = h * 2.0
                 xmin_new = max(cx - w_new * 1 / 2, 0)
                 xmax_new = min(cx + w_new * 1 / 2, 1100)
                 ymin_new = max(cy - h_new * 1 / 2, 0)
@@ -101,14 +99,15 @@ class AnnotationTransform(object):
                 bndbox_new = [xmin_new, ymin_new, xmax_new, ymax_new]
             else:
                 bndbox_new = bndbox.copy()
-
             label_idx = self.class_to_ind[name]
+
             # bndbox.append(label_idx)
             bndbox_new.append(label_idx)
-            # res += [bndbox]  # [xmin, ymin, xmax, ymax, label_ind]
             # res = np.vstack((res, bndbox))
             res_new = np.vstack((res_new, bndbox_new))
-            # img_id = target.find('filename').text[:-4]
+        # if len(res) == 0:
+        #     np.vstack((res, [0, 0, 0, 0, 0]))
+        # return res  # [[xmin, ymin, xmax, ymax, label_ind], ... ]
         if len(res_new) == 0:
             np.vstack((res_new, [0, 0, 0, 0, 0]))
         return res_new  # [[xmin, ymin, xmax, ymax, label_ind], ... ]
