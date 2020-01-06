@@ -320,7 +320,7 @@ def main():
               gamma, end_epoch, cfg)
         if (epoch % 10 == 0) or (epoch % 5 == 0 and epoch >= 200):
             save_checkpoint(net, epoch, size, optimizer)
-        if (epoch >= 20 and epoch % 10 == 0):
+        if (epoch >= 10 and epoch % 10 == 0):
             eval_net(
                 val_dataset,
                 val_loader,

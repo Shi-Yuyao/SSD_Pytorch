@@ -1,6 +1,6 @@
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 import torch.cuda.nvtx
 import torch.nn as nn
 import torch.optim as optim
@@ -69,10 +69,11 @@ def im_detect(img, net, detector, transform, thresh=0.01):
         '''采用图片推理'''
         # x = transform(img)[0].unsqueeze(0)  # 将图片转化为tensor
         # x = x.cuda()  # 采用GPU
+        # output = net(x)  # 图片网络推理
         '''采用随机tensor推理'''
         img.cuda()
         t1 = time.time()
-        output = net(img)  # 网络推理
+        output = net(img)  # 张量网络推理
         t2 = time.time()
         boxes, scores = detector.forward(output)  # 检测并输出解码框和置信度
         t3 = time.time()
