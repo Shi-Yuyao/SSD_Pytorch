@@ -71,7 +71,7 @@ class PriorBox(object):
                     dense_cx = [x * self.steps[k][0] / self.img_wh[0] for x in
                                 [j + 0.25, j + 0.75]]
                     dense_cy = [y * self.steps[k][1] / self.img_wh[1] for y in
-                                [j + 0.25, j + 0.75]]
+                                [i + 0.25, i + 0.75]]
                     for cx, cy in product(dense_cx, dense_cy):
                         # aspect_ratio: 1
                         # rel size: min_size
